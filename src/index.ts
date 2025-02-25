@@ -1,18 +1,51 @@
-/**
- * Welcome to Cloudflare Workers! This is your first worker.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `npm run deploy` to publish your worker
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
+import { session, Telegraf } from 'telegraf';
+import { getOpenAIClient } from './gpt';
+import { message } from 'telegraf/filters';
+import { generateAiResponse } from './utils';
 
 export default {
-	async fetch(request, env, ctx): Promise<Response> {
-		return new Response('Hello World!');
+	async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
+		const gpt = getOpenAIClient(env.API_KEY);
+		const bot = new Telegraf<any>(env.BOT_KEY, {
+			telegram: { webhookReply: false },
+		});
+
+		bot.use(
+			session({
+				defaultSession: () => ({
+					conversationHistory: [],
+				}),
+			}),
+		);
+
+		bot.on(message('text'), async (ctx) => {
+			if (!ctx.message?.text || ctx.message.from.is_bot) return;
+
+			const userId = ctx.message.from.id.toString();
+			const userMessage = ctx.message.text;
+
+			ctx.session.conversationHistory.push({
+				role: 'user',
+				content: userMessage,
+				name: userId,
+			});
+
+			const botMind = await generateAiResponse(ctx, gpt.think);
+
+			if (botMind) {
+				await ctx.telegram.sendMessage(ctx.message.chat.id, botMind);
+			}
+		});
+
+		return handleUpdate(request, bot);
 	},
-} satisfies ExportedHandler<Env>;
+};
+
+async function handleUpdate(request: Request, bot: Telegraf) {
+	if (request.method === 'POST') {
+		const update = await request.json();
+		await bot.handleUpdate(update);
+		return new Response('OK');
+	}
+	return new Response('Method Not Allowed', { status: 405 });
+}
