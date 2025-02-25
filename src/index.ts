@@ -32,6 +32,8 @@ export default {
 
 			const botMind = await generateAiResponse(ctx, gpt.think);
 
+			console.log('botMind: ', botMind);
+
 			if (botMind) {
 				await ctx.telegram.sendMessage(ctx.message.chat.id, botMind);
 			}
