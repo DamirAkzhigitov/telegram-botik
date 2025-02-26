@@ -16,7 +16,6 @@
 		"@cloudflare/workers-types": "^4.20250224.0",
 		"@types/node": "^22.13.5",
 		"tsx": "^4.19.3",
-		"telegram-bot-ts-types": "^1.4.0",
 		"typescript": "^5.5.2",
 		"vitest": "~2.1.9",
 		"wrangler": "^3.109.3"
