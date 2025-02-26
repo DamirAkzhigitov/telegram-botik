@@ -2,15 +2,13 @@ const getRandom = () => Math.round(Math.random() * 25000);
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, getRandom()));
 
-async function generateAiResponse(ctx: any, gptApi: (val: any[]) => Promise<any>) {
-	const recentHistory = ctx.session.conversationHistory.slice(-3);
-
+async function generateAiResponse(messages: string, gptApi: (val: string) => Promise<any>) {
 	let botMind = '';
 
-	if (Math.random() < 0.25) {
-		await delay();
+	if (Math.random() < 0.25 && messages) {
+		botMind = await gptApi(messages);
 
-		botMind = await gptApi(recentHistory);
+		await delay();
 	}
 
 	return botMind;
