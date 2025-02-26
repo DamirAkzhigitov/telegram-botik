@@ -1,18 +1,17 @@
 import { getOpenAIClient } from './gpt';
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
-import { generateAiResponse, isEmoji, replyWithSticker } from './utils';
+import { delay, generateAiResponse, replyWithSticker } from './utils';
 import { ChatMessage, SessionData } from './types';
 
-const botName = '@nairbru007bot'
+const botName = '@nairbru007bot';
 
-export const createBot = async (env: { API_KEY: string, BOT_KEY: string, CHAT_SESSIONS_STORAGE: any }, webhookReply = false) => {
+export const createBot = async (env: { API_KEY: string; BOT_KEY: string; CHAT_SESSIONS_STORAGE: any }, webhookReply = false) => {
 	const gpt = getOpenAIClient(env.API_KEY);
 	const bot = new Telegraf(env.BOT_KEY, {
 		telegram: { webhookReply },
 	});
 
-	// Получение истории сообщений для конкретного чата
 	const getSession = async (chatId: number): Promise<SessionData> => {
 		try {
 			const data = await env.CHAT_SESSIONS_STORAGE.get(`session_${chatId}`);
@@ -22,7 +21,6 @@ export const createBot = async (env: { API_KEY: string, BOT_KEY: string, CHAT_SE
 		}
 	};
 
-	// Сохранение истории сообщений для конкретного чата
 	const saveSession = async (chatId: number, session: SessionData) => {
 		await env.CHAT_SESSIONS_STORAGE.put(
 			`session_${chatId}`,
@@ -32,7 +30,6 @@ export const createBot = async (env: { API_KEY: string, BOT_KEY: string, CHAT_SE
 			}),
 		);
 	};
-
 
 	bot.on(message(), async (ctx) => {
 		try {
@@ -51,29 +48,45 @@ export const createBot = async (env: { API_KEY: string, BOT_KEY: string, CHAT_SE
 				timestamp: Date.now(),
 			};
 
-			const updatedMessages = [...sessionData.userMessages, newMessage];
-
-			await saveSession(chatId, { userMessages: updatedMessages });
-
-			const recentMessages = updatedMessages
+			const recentMessages = [...sessionData.userMessages]
 				.slice(-10)
-				.map((m) => `${m.username}: ${m.content}`)
-				.join('\n');
+				.map((m) => `${m.username}: ${m.content};`)
+				.reverse()
+				.join(';');
 
-			const botMind = await generateAiResponse(recentMessages, gpt.think, !!userMessage.match(botName));
+			const botMind = await generateAiResponse(
+				`Пользователь ${newMessage.username} написал: ${newMessage.content}`,
+				recentMessages,
+				gpt.think,
+				!!userMessage.match(botName),
+			);
 
-			if (botMind) {
-				if (isEmoji(botMind) && botMind.length < 9) {
-					await replyWithSticker(ctx, botMind)
-				} else {
-					await ctx.telegram.sendMessage(chatId, botMind);
-				}
+			await saveSession(chatId, { userMessages: [...sessionData.userMessages, newMessage] });
+
+			if (botMind.length) {
+				await delay();
+
+				botMind.forEach(({ content, type }) => {
+					if (type === 'emoji') {
+						replyWithSticker(ctx, content);
+					} else if (type === 'text') {
+						ctx.telegram.sendMessage(chatId, content);
+					} else if (type === 'reaction') {
+						ctx.telegram.setMessageReaction(chatId, ctx.message.message_id, [
+							{
+								type: 'emoji',
+								emoji: content,
+							},
+						]);
+					}
+				});
+
+				await ctx.telegram.sendChatAction(chatId, 'typing');
 			}
-
 		} catch (error) {
 			console.error('Error processing message:', error);
 		}
 	});
 
-	return bot
-}
+	return bot;
+};
