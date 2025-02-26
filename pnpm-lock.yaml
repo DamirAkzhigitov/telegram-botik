@@ -27,6 +27,9 @@ importers:
       '@types/node':
         specifier: ^22.13.5
         version: 22.13.5
+      telegram-bot-ts-types:
+        specifier: ^1.4.0
+        version: 1.4.0
       tsx:
         specifier: ^4.19.3
         version: 4.19.3
@@ -994,6 +997,10 @@ packages:
     resolution: {integrity: sha512-hGfm/slu0ZabnNt4oaRZ6uREyfCj6P4fT/n6A1rGV+Z0VdGXjfOhVUpkn6qVQONHGIFwmveGXyDs75+nr6FM8w==}
     engines: {node: '>= 6'}
 
+  formdata-node@2.5.0:
+    resolution: {integrity: sha512-JFSNLq34u2Tqc6F034x5aaK3ksIfrDBMPie8b4KYx2/pVDLxWFXDly52dsvHjZ+A0LGHTZb/w4HBZVdgN74RTw==}
+    engines: {node: '>= 10.17'}
+
   formdata-node@4.4.1:
     resolution: {integrity: sha512-0iirZp3uVDjVGt9p49aTaqjk84TrglENEDuqfdlZQ1roC9CWlPk6Avf8EEnZNcAqPonwkG35x4n3ww/1THYAeQ==}
     engines: {node: '>= 12.20'}
@@ -1058,8 +1065,16 @@ packages:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
 
+  mime-db@1.46.0:
+    resolution: {integrity: sha512-svXaP8UQRZ5K7or+ZmfNhg2xX3yKDMUzqadsSqi4NCH/KomcH75MAMYAGVlvXn4+b/xOPhS3I2uHKRUzvjY7BQ==}
+    engines: {node: '>= 0.6'}
+
   mime-db@1.52.0:
     resolution: {integrity: sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg==}
+    engines: {node: '>= 0.6'}
+
+  mime-types@2.1.29:
+    resolution: {integrity: sha512-Y/jMt/S5sR9OaqteJtslsFZKWOIIqMACsJSiHghlCAyhf7jfVYjKBmLiX8OgpWeW+fjJ2b+Az69aPFPkUOY6xQ==}
     engines: {node: '>= 0.6'}
 
   mime-types@2.1.35:
@@ -1232,6 +1247,9 @@ packages:
     resolution: {integrity: sha512-yjEu2NwkHlXu0OARWoNhJlIjX09dRktiMQFsM678BAH/PEPVwctzL67+tvXqLCRQQvm3SDtki2saGO9hLlz68w==}
     engines: {node: ^12.20.0 || >=14.13.1}
     hasBin: true
+
+  telegram-bot-ts-types@1.4.0:
+    resolution: {integrity: sha512-yohWnZ2GzSmQ7hj2aJtc7zeh5EZ4Ss2wg9OKJB1ioEgMKKCZsn13QX58dhnFk5KjOFcUiKLD2WdcjgvWiIWovA==}
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -2117,6 +2135,10 @@ snapshots:
       es-set-tostringtag: 2.1.0
       mime-types: 2.1.35
 
+  formdata-node@2.5.0:
+    dependencies:
+      mime-types: 2.1.29
+
   formdata-node@4.4.1:
     dependencies:
       node-domexception: 1.0.0
@@ -2187,7 +2209,13 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
+  mime-db@1.46.0: {}
+
   mime-db@1.52.0: {}
+
+  mime-types@2.1.29:
+    dependencies:
+      mime-db: 1.46.0
 
   mime-types@2.1.35:
     dependencies:
@@ -2408,6 +2436,10 @@ snapshots:
     transitivePeerDependencies:
       - encoding
       - supports-color
+
+  telegram-bot-ts-types@1.4.0:
+    dependencies:
+      formdata-node: 2.5.0
 
   tinybench@2.9.0: {}
 
