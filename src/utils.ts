@@ -2,8 +2,6 @@ import { MessagesArray, Sticker } from './types';
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 5000));
 
-const isEmoji = (str: string) => /\p{Emoji}/u.test(str);
-
 async function generateAiResponse(
 	userMessage: string,
 	messages: string,
@@ -62,4 +60,4 @@ const replyWithSticker = async (ctx: any, emoji: string) => {
 	await ctx.telegram.sendSticker(ctx.chat.id, stickerByEmoji.file_id);
 };
 
-export { delay, generateAiResponse, replyWithSticker, isEmoji };
+export { delay, generateAiResponse, replyWithSticker };

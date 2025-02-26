@@ -1,17 +1,17 @@
 import { getOpenAIClient } from './gpt';
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
-import { delay, generateAiResponse, isEmoji, replyWithSticker } from './utils';
+import { delay, generateAiResponse, replyWithSticker } from './utils';
 import { ChatMessage, SessionData } from './types';
 
 const botName = '@nairbru007bot';
+
 export const createBot = async (env: { API_KEY: string; BOT_KEY: string; CHAT_SESSIONS_STORAGE: any }, webhookReply = false) => {
 	const gpt = getOpenAIClient(env.API_KEY);
 	const bot = new Telegraf(env.BOT_KEY, {
 		telegram: { webhookReply },
 	});
 
-	// Получение истории сообщений для конкретного чата
 	const getSession = async (chatId: number): Promise<SessionData> => {
 		try {
 			const data = await env.CHAT_SESSIONS_STORAGE.get(`session_${chatId}`);
@@ -21,7 +21,6 @@ export const createBot = async (env: { API_KEY: string; BOT_KEY: string; CHAT_SE
 		}
 	};
 
-	// Сохранение истории сообщений для конкретного чата
 	const saveSession = async (chatId: number, session: SessionData) => {
 		await env.CHAT_SESSIONS_STORAGE.put(
 			`session_${chatId}`,
@@ -65,8 +64,7 @@ export const createBot = async (env: { API_KEY: string; BOT_KEY: string; CHAT_SE
 			await saveSession(chatId, { userMessages: [...sessionData.userMessages, newMessage] });
 
 			if (botMind.length) {
-				// await delay();
-				console.log(JSON.stringify(botMind));
+				await delay();
 
 				botMind.forEach(({ content, type }) => {
 					if (type === 'emoji') {
