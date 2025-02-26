@@ -27,13 +27,16 @@ export const getOpenAIClient = (key: string) => {
 	})
 
 	async function gptApi(
-		messages: any[]
+		messages: string
 	) {
 
 		const options = {
-			model: 'openai/o3-mini-high',
+			model: 'google/gemini-2.0-flash-lite-001',
 			messages: [
-				...messages.reverse(),
+				{
+					role: 'user',
+					content: messages,
+				},
 				{
 					role: 'system',
 					content: systemPrompt
