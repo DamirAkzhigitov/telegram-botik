@@ -31,12 +31,36 @@ export const createBot = async (env: { API_KEY: string; BOT_KEY: string; CHAT_SE
 		);
 	};
 
+	bot.command('set_prompt', async (ctx) => {
+		try {
+			const chatId = ctx.chat.id;
+			const userMessage = ctx.message.text || '';
+
+			const newPrompt = userMessage.replace('/set_prompt', '').trim();
+
+			await savePrompt(chatId, newPrompt);
+
+			await ctx.telegram.sendMessage(chatId, 'Системный промт обновлен!');
+		} catch (error) {
+			console.error('Error updating prompt:', error);
+		}
+	});
+
+	// New function to save and load user prompts
+	const savePrompt = async (chatId: number, prompt: string) => {
+		await env.CHAT_SESSIONS_STORAGE.put(`prompt_${chatId}`, prompt);
+	};
+
+	const getPrompt = async (chatId: number): Promise<string> => {
+		return (await env.CHAT_SESSIONS_STORAGE.get(`prompt_${chatId}`)) || '';
+	};
+
 	bot.on(message(), async (ctx) => {
 		try {
 			if (ctx.message.from.is_bot) return;
 
 			const username = ctx.message.from.first_name || ctx.message.from.last_name || ctx.message.from.username || 'Anonymous';
-			
+
 			const chatId = ctx.chat.id;
 			const userMessage = ('text' in ctx.message && ctx.message.text) || '';
 
@@ -54,10 +78,13 @@ export const createBot = async (env: { API_KEY: string; BOT_KEY: string; CHAT_SE
 				.reverse()
 				.join(';');
 
+			const customPrompt = await getPrompt(chatId);
+
 			const botMind = await generateAiResponse(
 				`Пользователь ${newMessage.username} написал: ${newMessage.content}`,
 				recentMessages,
 				gpt.think,
+				customPrompt,
 				!!userMessage.match(botName),
 			);
 

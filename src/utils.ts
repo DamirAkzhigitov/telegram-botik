@@ -5,13 +5,14 @@ const delay = () => new Promise((resolve) => setTimeout(resolve, 5000));
 async function generateAiResponse(
 	userMessage: string,
 	messages: string,
-	gptApi: (val: string, valb: string) => Promise<MessagesArray>,
+	gptApi: (val: string, valb: string, prompt: string) => Promise<MessagesArray>,
+	systemPrompt: string,
 	force = false,
 ) {
 	const botMind: MessagesArray = [];
 
 	if ((Math.random() < 0.05 && messages) || force) {
-		const response = await gptApi(userMessage, messages);
+		const response = await gptApi(userMessage, messages, systemPrompt);
 
 		botMind.push(...response);
 	}
