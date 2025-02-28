@@ -10,7 +10,7 @@ async function generateAiResponse(
 ) {
 	const botMind: MessagesArray = [];
 
-	if ((Math.random() < 0.25 && messages) || force) {
+	if ((Math.random() < 0.05 && messages) || force) {
 		const response = await gptApi(userMessage, messages);
 
 		botMind.push(...response);
