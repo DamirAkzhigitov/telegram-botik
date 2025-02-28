@@ -35,8 +35,8 @@ export const createBot = async (env: { API_KEY: string; BOT_KEY: string; CHAT_SE
 		try {
 			if (ctx.message.from.is_bot) return;
 
-			const username = ctx.message.from.username || ctx.message.from.first_name || 'Anonymous';
-
+			const username = ctx.message.from.first_name || ctx.message.from.last_name || ctx.message.from.username || 'Anonymous';
+			
 			const chatId = ctx.chat.id;
 			const userMessage = ('text' in ctx.message && ctx.message.text) || '';
 
