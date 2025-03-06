@@ -35,7 +35,7 @@ export const getOpenAIClient = (key: string) => {
 	async function gptApi(userMessage: string, messages: string, customPrompt: string): Promise<MessagesArray> {
 		try {
 			const options = {
-				model: 'deepseek/deepseek-r1',
+				model: 'google/gemini-2.0-flash-001',
 				messages: [
 					{
 						role: 'user',
