@@ -73,7 +73,6 @@ export const createBot = async (env: { API_KEY: string; BOT_KEY: string; CHAT_SE
 			};
 
 			const recentMessages = [...sessionData.userMessages]
-				.slice(-10)
 				.map((m) => `${m.username}: ${m.content};`)
 				.reverse()
 				.join(';');
