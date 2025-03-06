@@ -35,7 +35,7 @@ export const getOpenAIClient = (key: string) => {
 	async function gptApi(userMessage: string, messages: string, customPrompt: string): Promise<MessagesArray> {
 		try {
 			const options = {
-				model: 'openai/gpt-4o-mini',
+				model: 'deepseek/deepseek-r1',
 				messages: [
 					{
 						role: 'user',
