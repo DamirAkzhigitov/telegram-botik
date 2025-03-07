@@ -89,6 +89,8 @@ export const getOpenAIClient = (key: string) => {
 
 			const response = JSON.parse(completion?.choices?.[0]?.message.content || '[]');
 
+			console.log('response: ', JSON.stringify(response));
+
 			if (!response?.items) return [];
 
 			return response.items;
