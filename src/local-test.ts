@@ -1,18 +1,15 @@
 import { createBot } from './bot';
 
-
 const bot = await createBot({
 	API_KEY: process.env.API_KEY!,
 	BOT_KEY: process.env.BOT_KEY!,
 	CHAT_SESSIONS_STORAGE: {
-			put: () => {},
-			get: () => {}
-	}
-})
+		put: () => {},
+		get: () => {},
+	},
+});
 
 bot.launch();
-
-console.log('bot start');
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
