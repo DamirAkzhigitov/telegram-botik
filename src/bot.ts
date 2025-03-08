@@ -127,7 +127,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
       }
 
       if (sessionData.promptNotSet) {
-        console.log('ctx.message; ', ctx.message)
+        //console.log('ctx.message; ', ctx.message)
         await sessionController.updateSession(chatId, {
           prompt: userMessage,
           promptNotSet: false
@@ -167,10 +167,10 @@ export const createBot = async (env: Context, webhookReply = false) => {
 
       let image = ''
 
-      console.log('ctx.message: ', ctx.message)
+      //console.log('ctx.message: ', ctx.message)
 
       if ('photo' in ctx.message) {
-        console.log('photo in message')
+        //console.log('photo in message')
         const instance = axios.create({
           baseURL: 'https://api.telegram.org/',
           timeout: 1000
@@ -183,13 +183,12 @@ export const createBot = async (env: Context, webhookReply = false) => {
         const downloadLink = `file/bot${env.BOT_KEY}/${file.file_path}`
 
         try {
-          const { data } = await instance.get(downloadLink, {
+          const response = await instance.get(downloadLink, {
             responseType: 'arraybuffer'
           })
-          const base64Image = Buffer.from(data.data).toString('base64')
-
+          //console.log(response)
+          const base64Image = Buffer.from(response.data).toString('base64')
           image = `data:image/jpeg;base64,${base64Image}`
-          console.log('image downloaded!, image: ', image)
         } catch (e) {
           console.error('failed download', e)
         }

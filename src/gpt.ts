@@ -40,43 +40,35 @@ export const getOpenAIClient = (key: string) => {
     imageUrl?: string
   ): Promise<MessagesArray> {
     try {
-      console.log('gptApi, imageUrl: ', imageUrl)
-      const opMessages = [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: userMessage
-            },
-            ...(imageUrl
-              ? [
-                  {
-                    type: 'image_url',
-                    image_url: {
-                      url: imageUrl
-                    }
-                  }
-                ]
-              : [])
-          ]
-        },
-        {
-          role: 'system',
-          content: `${customPrompt}\n${formatting}`
-        },
-        {
-          role: 'system',
-          content: `история сообщений: ${messages}`
-        }
-      ]
-
-      console.log('opMessages: ', JSON.stringify(opMessages[0].content))
-
-      const options: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
+      //console.log('gptApi, imageUrl: ', imageUrl)
+      const options: OpenAI.Chat.ChatCompletionCreateParams = {
         model: 'google/gemini-2.0-flash-001',
-        messages: opMessages as any,
-        max_tokens: 4000,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: userMessage
+              },
+              ...((imageUrl
+                ? [
+                    {
+                      type: 'image_url',
+                      image_url: {
+                        url: imageUrl
+                      }
+                    }
+                  ]
+                : []) as any)
+            ]
+          },
+          {
+            role: 'system',
+            content: `${customPrompt}${formatting} история сообщений: ${messages}`
+          }
+        ],
+        max_tokens: 8000,
         temperature: 1,
         presence_penalty: 0,
         response_format: {
