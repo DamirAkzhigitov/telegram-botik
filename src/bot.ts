@@ -213,7 +213,6 @@ export const createBot = async (env: Context, webhookReply = false) => {
 
 			const asyncActions = botMessages.map(async ({ content, type }) => {
 				if (type === 'emoji') {
-					console.log('sessionData.stickersPacks :', sessionData.stickersPacks)
 					const stickerSet = getRandomValueArr(sessionData.stickersPacks)
 					const response = await ctx.telegram.getStickerSet(stickerSet)
 					const stickerByEmoji = findByEmoji(
