@@ -8,7 +8,11 @@ export interface ChatMessage {
 
 export interface SessionData {
 	userMessages: ChatMessage[]
+	stickersPacks: string[]
 	prompt: string
+	firstTime: boolean
+	promptNotSet: boolean
+	stickerNotSet: boolean
 }
 
 export interface Context {

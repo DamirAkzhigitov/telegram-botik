@@ -1,18 +1,36 @@
 import { Context, SessionData } from '../types'
 
+const defaultStickerPack = 'kreksshpeks'
+
 export class SessionController {
 	session: SessionData
 	env: Context
 
 	constructor(env: Context) {
-		this.session = { userMessages: [], prompt: 'Отвечай на греческом' }
+		this.session = {
+			userMessages: [],
+			stickersPacks: [defaultStickerPack],
+			prompt: '',
+			firstTime: true,
+			promptNotSet: false,
+			stickerNotSet: false,
+		}
 		this.env = env
 	}
 
-	async getSession(chatId: string): Promise<SessionData> {
+	isOnlyDefaultStickerPack() {
+		return (
+			this.session?.stickersPacks?.length === 1 &&
+			this.session?.stickersPacks?.includes(defaultStickerPack)
+		)
+	}
+
+	async getSession(chatId: string | number): Promise<SessionData> {
 		try {
 			const data = await this.env.CHAT_SESSIONS_STORAGE.get(`session_${chatId}`)
-			return data ? JSON.parse(data) : this.session
+			if (data) this.session = JSON.parse(data)
+
+			return this.session
 		} catch (e) {
 			console.error('getSession error', e)
 			return this.session
@@ -20,19 +38,35 @@ export class SessionController {
 	}
 
 	async updateSession(
-		chatId: number,
+		chatId: string | number,
 		value: Partial<SessionData>,
 	): Promise<void> {
+		const newSession = {
+			...this.session,
+			...value,
+		}
+		try {
+			this.session = newSession
+			await this.env.CHAT_SESSIONS_STORAGE.put(
+				`session_${chatId}`,
+				JSON.stringify(this.session),
+			)
+		} catch (e) {
+			console.error('update session error', e)
+		}
+	}
+
+	async resetStickers(chatId: string | number) {
 		try {
 			await this.env.CHAT_SESSIONS_STORAGE.put(
 				`session_${chatId}`,
 				JSON.stringify({
 					...this.session,
-					...value,
-				}),
+					stickersPacks: [defaultStickerPack],
+				} as SessionData),
 			)
 		} catch (e) {
-			console.error('update session error', e)
+			console.error('resetStickers', e)
 		}
 	}
 }
