@@ -7,6 +7,8 @@ import { SessionController } from './service/SessionController'
 
 const botName = '@nairbru007bot'
 
+//
+
 export const createBot = async (env: Context, webhookReply = false) => {
 	const { openAi } = getOpenAIClient(env.API_KEY)
 	const bot = new Telegraf(env.BOT_KEY, {
