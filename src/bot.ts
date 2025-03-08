@@ -8,230 +8,242 @@ import { SessionController } from './service/SessionController'
 const botName = '@nairbru007bot'
 
 export const createBot = async (env: Context, webhookReply = false) => {
- const { openAi } = getOpenAIClient(env.API_KEY)
- const bot = new Telegraf(env.BOT_KEY, {
-  telegram: {
-   webhookReply
-  },
- })
- const sessionController = new SessionController(env)
+	const { openAi } = getOpenAIClient(env.API_KEY)
+	const bot = new Telegraf(env.BOT_KEY, {
+		telegram: {
+			webhookReply,
+		},
+	})
+	const sessionController = new SessionController(env)
 
- bot.command('set_reply_chance', async (ctx) => {
-  const keyboard = Markup.inlineKeyboard([
-   [Markup.button.callback('5%', '0.05'),
-   Markup.button.callback('25%', '0.25'),
-   Markup.button.callback('50%', '0.50'),
-   Markup.button.callback('75%', '0.75'),
-   Markup.button.callback('100%', '1'),
-   ],
-  ])
-  await ctx.reply('Вероятность ответа:', keyboard)
- })
+	bot.command('set_reply_chance', async (ctx) => {
+		const keyboard = Markup.inlineKeyboard([
+			[
+				Markup.button.callback('5%', '0.05'),
+				Markup.button.callback('25%', '0.25'),
+				Markup.button.callback('50%', '0.50'),
+				Markup.button.callback('75%', '0.75'),
+				Markup.button.callback('100%', '1'),
+			],
+		])
+		await ctx.reply('Вероятность ответа:', keyboard)
+	})
 
- bot.action(['0.05', '0.25', '0.50', '0.75', '1'], async (ctx) => {
-  await ctx.answerCbQuery()
-  const percentage = ctx.match[0]
+	bot.action(['0.05', '0.25', '0.50', '0.75', '1'], async (ctx) => {
+		await ctx.answerCbQuery()
+		const percentage = ctx.match[0]
 
-  if (ctx.chat?.id) {
-   await sessionController.getSession(ctx.chat.id)
-   await sessionController.updateSession(ctx.chat.id, {
-    replyChance: percentage,
-   })
-  }
-  await ctx.editMessageText(`Вы выбрали ${Number(percentage) * 100}%`)
- })
+		if (ctx.chat?.id) {
+			await sessionController.getSession(ctx.chat.id)
+			await sessionController.updateSession(ctx.chat.id, {
+				replyChance: percentage,
+			})
+		}
+		await ctx.editMessageText(`Вы выбрали ${Number(percentage) * 100}%`)
+	})
 
- bot.command('help', async (ctx) => {
-  try {
-   await ctx.telegram.sendMessage(ctx.chat.id,
-    `/set_reply_chance - выберите с каким шансом бот будет отвечать\n/reset_sticker_pack - сбросить выбор стикер паков\n/add_sticker_pack - добавить боту новый стикер пак\n/set_new_prompt - установить системный промпт`,
-   )
-  } catch (error) {
-   console.error('Error help:', error)
-  }
- })
+	bot.command('help', async (ctx) => {
+		try {
+			await ctx.telegram.sendMessage(
+				ctx.chat.id,
+				`/set_reply_chance - выберите с каким шансом бот будет отвечать\n/reset_sticker_pack - сбросить выбор стикер паков\n/add_sticker_pack - добавить боту новый стикер пак\n/set_new_prompt - установить системный промпт`,
+			)
+		} catch (error) {
+			console.error('Error help:', error)
+		}
+	})
 
- bot.command('reset_sticker_pack', async (ctx) => {
-  try {
-   await sessionController.getSession(ctx.chat.id)
-   await sessionController.resetStickers(ctx.chat.id)
-   await ctx.telegram.sendMessage(ctx.chat.id,
-    'Стикер пак обновлен до стандартного',
-   )
-  } catch (error) {
-   console.error('Error reset_sticker_pack:', error)
-  }
- })
+	bot.command('reset_sticker_pack', async (ctx) => {
+		try {
+			await sessionController.getSession(ctx.chat.id)
+			await sessionController.resetStickers(ctx.chat.id)
+			await ctx.telegram.sendMessage(
+				ctx.chat.id,
+				'Стикер пак обновлен до стандартного',
+			)
+		} catch (error) {
+			console.error('Error reset_sticker_pack:', error)
+		}
+	})
 
- bot.command('add_sticker_pack', async (ctx) => {
-  try {
-   await sessionController.getSession(ctx.chat.id)
-   await sessionController.updateSession(ctx.chat.id, {
-    stickerNotSet: true,
-   })
-   await ctx.telegram.sendMessage(ctx.chat.id,
-    'В следующем сообщении отправьте стикер который я должен использовать',
-   )
-  } catch (error) {
-   console.error('Error add_sticker_pack:', error)
-  }
- })
+	bot.command('add_sticker_pack', async (ctx) => {
+		try {
+			await sessionController.getSession(ctx.chat.id)
+			await sessionController.updateSession(ctx.chat.id, {
+				stickerNotSet: true,
+			})
+			await ctx.telegram.sendMessage(
+				ctx.chat.id,
+				'В следующем сообщении отправьте стикер который я должен использовать',
+			)
+		} catch (error) {
+			console.error('Error add_sticker_pack:', error)
+		}
+	})
 
- bot.command('set_new_prompt', async (ctx) => {
-  try {
-   await sessionController.getSession(ctx.chat.id)
-   await sessionController.updateSession(ctx.chat.id, {
-    promptNotSet: true,
-   })
-   await ctx.telegram.sendMessage(ctx.chat.id,
-    'В следующем сообщении отправьте системный промпт',
-   )
-  } catch (error) {
-   console.error('Error updating prompt:', error)
-  }
- })
+	bot.command('set_new_prompt', async (ctx) => {
+		try {
+			await sessionController.getSession(ctx.chat.id)
+			await sessionController.updateSession(ctx.chat.id, {
+				promptNotSet: true,
+			})
+			await ctx.telegram.sendMessage(
+				ctx.chat.id,
+				'В следующем сообщении отправьте системный промпт',
+			)
+		} catch (error) {
+			console.error('Error updating prompt:', error)
+		}
+	})
 
- bot.on(message(), async (ctx) => {
-  try {
-   if (ctx.message.from.is_bot) return
+	bot.on(message(), async (ctx) => {
+		try {
+			if (ctx.message.from.is_bot) return
 
-   const username =
-    ctx.message.from.first_name ||
-    ctx.message.from.last_name ||
-    ctx.message.from.username ||
-    'Anonymous'
-   const chatId = ctx.chat.id
-   const userMessage = ('text' in ctx.message && ctx.message.text) || ''
-   const isPrivate = false // (ctx.chat.type = 'private')
-   const isMessageToBot = !!userMessage.match(botName)
-   const sessionData = await sessionController.getSession(chatId)
-   const shouldReply = isReply(sessionData.replyChance)
+			const username =
+				ctx.message.from.first_name ||
+				ctx.message.from.last_name ||
+				ctx.message.from.username ||
+				'Anonymous'
+			const chatId = ctx.chat.id
+			const userMessage = ('text' in ctx.message && ctx.message.text) || ''
+			const isPrivate = false // (ctx.chat.type = 'private')
+			const isMessageToBot = !!userMessage.match(botName)
+			const sessionData = await sessionController.getSession(chatId)
+			const shouldReply = isReply(sessionData.replyChance)
 
-   if (sessionData.firstTime) {
-    await sessionController.updateSession(chatId, {
-     firstTime: false,
-    })
-    await ctx.telegram.sendMessage(
-     chatId,
-     `Привет, спасибо добавили меня в чат, я всегда отвечаю если вы упоминаете меня в сообщениях, а так же при любых других сообщениях с 5% шансом, для того что бы узнать команды введите /help`,
-    )
-   }
+			if (sessionData.firstTime) {
+				await sessionController.updateSession(chatId, {
+					firstTime: false,
+				})
+				await ctx.telegram.sendMessage(
+					chatId,
+					`Привет, спасибо добавили меня в чат, я всегда отвечаю если вы упоминаете меня в сообщениях, а так же при любых других сообщениях с 5% шансом, для того что бы узнать команды введите /help`,
+				)
+			}
 
-   if (sessionData.promptNotSet) {
-    console.log('ctx.message; ', ctx.message)
-    await sessionController.updateSession(chatId, {
-     prompt: userMessage,
-     promptNotSet: false,
-    })
-    return await ctx.telegram.sendMessage(chatId, 'Системный промт обновлен!')
-   }
+			if (sessionData.promptNotSet) {
+				console.log('ctx.message; ', ctx.message)
+				await sessionController.updateSession(chatId, {
+					prompt: userMessage,
+					promptNotSet: false,
+				})
+				return await ctx.telegram.sendMessage(
+					chatId,
+					'Системный промт обновлен!',
+				)
+			}
 
-   if (sessionData.stickerNotSet) {
-    if ('sticker' in ctx.message && ctx.message.sticker?.set_name) {
-     const onlyDefault = sessionController.isOnlyDefaultStickerPack()
-     let newPack = sessionData.stickersPacks
+			if (sessionData.stickerNotSet) {
+				if ('sticker' in ctx.message && ctx.message.sticker?.set_name) {
+					const onlyDefault = sessionController.isOnlyDefaultStickerPack()
+					let newPack = sessionData.stickersPacks
 
-     if (onlyDefault) {
-      newPack = [ctx.message.sticker.set_name]
-     } else {
-      newPack.push(ctx.message.sticker.set_name)
-     }
+					if (onlyDefault) {
+						newPack = [ctx.message.sticker.set_name]
+					} else {
+						newPack.push(ctx.message.sticker.set_name)
+					}
 
-     await sessionController.updateSession(chatId, {
-      stickersPacks: newPack,
-      stickerNotSet: false,
-     })
-     await ctx.telegram.sendMessage(chatId, 'Стикер пак был добавлен!')
-     return
-    } else {
-     await sessionController.updateSession(chatId, {
-      stickersPacks: ['kreksshpeks'],
-      stickerNotSet: false,
-     })
-    }
-   }
+					await sessionController.updateSession(chatId, {
+						stickersPacks: newPack,
+						stickerNotSet: false,
+					})
+					await ctx.telegram.sendMessage(chatId, 'Стикер пак был добавлен!')
+					return
+				} else {
+					await sessionController.updateSession(chatId, {
+						stickersPacks: ['kreksshpeks'],
+						stickerNotSet: false,
+					})
+				}
+			}
 
-   if (!shouldReply && !isMessageToBot && !isPrivate) return
+			if (!shouldReply && !isMessageToBot && !isPrivate) return
 
-   let newMessageText: string = userMessage
+			let newMessageText: string = userMessage
 
-   if ('photo' in ctx.message) {
-    const photo = ctx.message.photo
-    // Get the highest resolution photo available
-    const fileId = photo[photo.length - 1].file_id
-    const file = await bot.telegram.getFile(fileId)
-    const photoUrl = await bot.telegram.getFileLink(file.file_path || '')
+			if ('photo' in ctx.message) {
+				const photo = ctx.message.photo
+				// Get the highest resolution photo available
+				const fileId = photo[photo.length - 1].file_id
+				const file = await bot.telegram.getFile(fileId)
+				const photoUrl = await bot.telegram.getFileLink(file.file_path || '')
 
-    newMessageText = `[Photo] - ${photoUrl}`
-   }
+				newMessageText = `[Photo] - ${photoUrl}`
+			}
 
-   const currentTime = new Date()
+			const currentTime = new Date()
 
-   const newMessage: ChatMessage = {
-    name: username,
-    text: newMessageText,
-    time: currentTime.toISOString(),
-   }
+			const newMessage: ChatMessage = {
+				name: username,
+				text: newMessageText,
+				time: currentTime.toISOString(),
+			}
 
-   /**
-    *  Replaced: userMessage -> newMessage.text
-    *  @usage fixed the bug, where if user send photo message, then openAi send request with text message undefined
-    *
-    */
-   const recentMessages = [...sessionData.userMessages].map((m) => `${m.name}[${m.time}]: ${m.text};`).reverse().join(';')
+			/**
+			 *  Replaced: userMessage -> newMessage.text
+			 *  @usage fixed the bug, where if user send photo message, then openAi send request with text message undefined
+			 *
+			 */
+			const recentMessages = [...sessionData.userMessages]
+				.map((m) => `${m.name}[${m.time}]: ${m.text};`)
+				.reverse()
+				.join(';')
 
-   const botMessages = await openAi(
-    `${newMessage.name}[${newMessage.time}] написал: ${newMessage.text}`,
-    recentMessages,
-    sessionData.prompt,
-   )
+			const botMessages = await openAi(
+				`${newMessage.name}[${newMessage.time}] написал: ${newMessage.text}`,
+				recentMessages,
+				sessionData.prompt,
+			)
 
-   const botHistory = {
-    text: botMessages
-     .filter(({ type }) => type === 'text')
-     .map(({ content }) => content)
-     .join(''),
-    time: currentTime.toISOString(),
-    name: 'Иван Разумов',
-   }
+			const botHistory = {
+				text: botMessages
+					.filter(({ type }) => type === 'text')
+					.map(({ content }) => content)
+					.join(''),
+				time: currentTime.toISOString(),
+				name: 'Иван Разумов',
+			}
 
-   await sessionController.updateSession(chatId, {
-    userMessages: [...sessionData.userMessages, newMessage, botHistory],
-   })
+			await sessionController.updateSession(chatId, {
+				userMessages: [...sessionData.userMessages, newMessage, botHistory],
+			})
 
-   const asyncActions = botMessages.map(async ({ content, type }) => {
-    if (type === 'emoji') {
-     const stickerSet = getRandomValueArr(sessionData.stickersPacks)
-     const response = await ctx.telegram.getStickerSet(stickerSet)
-     const stickerByEmoji = findByEmoji(response.stickers as Sticker[],
-      content,
-     )
-     return ctx.telegram.sendSticker(ctx.chat.id, stickerByEmoji.file_id)
-    } else if (type === 'text') {
-     return ctx.telegram.sendMessage(chatId, content)
-    } else if (type === 'reaction') {
-     return ctx.telegram.setMessageReaction(
-      chatId,
-      ctx.message.message_id,
-      [
-       {
-        type: 'emoji',
-        emoji: content,
-       },
-      ],
-     )
-    }
-   })
+			const asyncActions = botMessages.map(async ({ content, type }) => {
+				if (type === 'emoji') {
+					const stickerSet = getRandomValueArr(sessionData.stickersPacks)
+					const response = await ctx.telegram.getStickerSet(stickerSet)
+					const stickerByEmoji = findByEmoji(
+						response.stickers as Sticker[],
+						content,
+					)
+					return ctx.telegram.sendSticker(ctx.chat.id, stickerByEmoji.file_id)
+				} else if (type === 'text') {
+					return ctx.telegram.sendMessage(chatId, content)
+				} else if (type === 'reaction') {
+					return ctx.telegram.setMessageReaction(
+						chatId,
+						ctx.message.message_id,
+						[
+							{
+								type: 'emoji',
+								emoji: content,
+							},
+						],
+					)
+				}
+			})
 
-   await Promise.all([
-    ctx.telegram.sendChatAction(chatId, 'typing'),
-    delay,
-    ...asyncActions,
-   ])
-  } catch (error) {
-   console.error('Error processing message:', error)
-  }
- })
+			await Promise.all([
+				ctx.telegram.sendChatAction(chatId, 'typing'),
+				delay,
+				...asyncActions,
+			])
+		} catch (error) {
+			console.error('Error processing message:', error)
+		}
+	})
 
- return bot
+	return bot
 }
