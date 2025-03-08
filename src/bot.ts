@@ -1,13 +1,11 @@
 import { getOpenAIClient } from './gpt'
-import { Telegraf } from 'telegraf'
+import { Telegraf, Markup } from 'telegraf'
 import { message } from 'telegraf/filters'
 import { delay, findByEmoji, getRandomValueArr, isReply } from './utils'
 import { ChatMessage, Context, Sticker } from './types'
 import { SessionController } from './service/SessionController'
 
 const botName = '@nairbru007bot'
-
-//
 
 export const createBot = async (env: Context, webhookReply = false) => {
 	const { openAi } = getOpenAIClient(env.API_KEY)
@@ -16,6 +14,50 @@ export const createBot = async (env: Context, webhookReply = false) => {
 	})
 
 	const sessionController = new SessionController(env)
+
+	bot.command('set_reply_chance', async (ctx) => {
+		const keyboard = Markup.inlineKeyboard([
+			[
+				Markup.button.callback('5%', '0.05'),
+				Markup.button.callback('25%', '0.25'),
+				Markup.button.callback('50%', '0.50'),
+				Markup.button.callback('75%', '0.75'),
+				Markup.button.callback('100%', '1'),
+			],
+		])
+
+		await ctx.reply('Вероятность ответа:', keyboard)
+	})
+
+	bot.action(['0.05', '0.25', '0.50', '0.75', '1'], async (ctx) => {
+		await ctx.answerCbQuery()
+		const percentage = ctx.match[0]
+
+		if (ctx.chat?.id) {
+			await sessionController.getSession(ctx.chat.id)
+			await sessionController.updateSession(ctx.chat.id, {
+				replyChance: percentage,
+			})
+		}
+
+		await ctx.reply(`Вы выбрали ${Number(percentage) * 100}%`)
+	})
+
+	bot.command('help', async (ctx) => {
+		try {
+			await ctx.telegram.sendMessage(
+				ctx.chat.id,
+				`
+				/set_reply_chance - выберите с каким шансом бот будет отвечать
+				/reset_sticker_pack - сбросить выбор стикер паков
+				/add_sticker_pack - добавить боту новый стикер пак
+				/set_new_prompt - установить системный промпт
+			`,
+			)
+		} catch (error) {
+			console.error('Error help:', error)
+		}
+	})
 
 	bot.command('reset_sticker_pack', async (ctx) => {
 		try {
@@ -28,7 +70,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
 				'Стикер пак обновлен до стандартного',
 			)
 		} catch (error) {
-			console.error('Error updating prompt:', error)
+			console.error('Error reset_sticker_pack:', error)
 		}
 	})
 
@@ -45,7 +87,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
 				'В следующем сообщении отправьте стикер который я должен использовать',
 			)
 		} catch (error) {
-			console.error('Error updating prompt:', error)
+			console.error('Error add_sticker_pack:', error)
 		}
 	})
 
@@ -80,9 +122,9 @@ export const createBot = async (env: Context, webhookReply = false) => {
 			const userMessage = ('text' in ctx.message && ctx.message.text) || ''
 			const isPrivate = false // (ctx.chat.type = 'private')
 			const isMessageToBot = !!userMessage.match(botName)
-			const shouldReply = isReply()
 
 			const sessionData = await sessionController.getSession(chatId)
+			const shouldReply = isReply(sessionData.replyChance)
 
 			if (sessionData.firstTime) {
 				await sessionController.updateSession(chatId, {
@@ -147,8 +189,17 @@ export const createBot = async (env: Context, webhookReply = false) => {
 				sessionData.prompt,
 			)
 
+			const botHistory = {
+				text: botMessages
+					.filter(({ type }) => type === 'text')
+					.map(({ content }) => content)
+					.join(''),
+				time: currentTime.toISOString(),
+				name: 'Иван Разумов',
+			}
+
 			await sessionController.updateSession(chatId, {
-				userMessages: [...sessionData.userMessages, newMessage],
+				userMessages: [...sessionData.userMessages, newMessage, botHistory],
 			})
 
 			const asyncActions = botMessages.map(async ({ content, type }) => {

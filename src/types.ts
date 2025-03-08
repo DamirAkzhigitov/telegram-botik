@@ -13,6 +13,7 @@ export interface SessionData {
 	firstTime: boolean
 	promptNotSet: boolean
 	stickerNotSet: boolean
+	replyChance: string
 }
 
 export interface Context {

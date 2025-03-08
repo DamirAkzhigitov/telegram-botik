@@ -13,6 +13,6 @@ const findByEmoji = (stickers: Sticker[], emoji: string): Sticker => {
 	)
 }
 
-const isReply = () => Math.random() < 0.05
+const isReply = (chance: string) => Math.random() < Number(chance)
 
 export { delay, isReply, getRandomValueArr, findByEmoji }
