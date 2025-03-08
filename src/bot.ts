@@ -78,7 +78,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
 
 			const chatId = ctx.chat.id
 			const userMessage = ('text' in ctx.message && ctx.message.text) || ''
-			const isPrivate = (ctx.chat.type = 'private')
+			const isPrivate = false // (ctx.chat.type = 'private')
 			const isMessageToBot = !!userMessage.match(botName)
 			const shouldReply = isReply()
 
