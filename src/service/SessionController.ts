@@ -14,6 +14,7 @@ export class SessionController {
 			firstTime: true,
 			promptNotSet: false,
 			stickerNotSet: false,
+			replyChance: '1',
 		}
 		this.env = env
 	}
