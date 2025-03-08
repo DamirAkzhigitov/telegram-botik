@@ -1,118 +1,189 @@
-import { getOpenAIClient } from './gpt';
-import { Telegraf } from 'telegraf';
-import { message } from 'telegraf/filters';
-import { delay, generateAiResponse, replyWithSticker } from './utils';
-import { ChatMessage, SessionData } from './types';
+import { getOpenAIClient } from './gpt'
+import { Telegraf } from 'telegraf'
+import { message } from 'telegraf/filters'
+import { delay, findByEmoji, getRandomValueArr, isReply } from './utils'
+import { ChatMessage, Context, Sticker } from './types'
+import { SessionController } from './service/SessionController'
 
-const botName = '@nairbru007bot';
+const botName = '@nairbru007bot'
 
-export const createBot = async (env: { API_KEY: string; BOT_KEY: string; CHAT_SESSIONS_STORAGE: any }, webhookReply = false) => {
-	const gpt = getOpenAIClient(env.API_KEY);
+export const createBot = async (env: Context, webhookReply = false) => {
+	const { openAi } = getOpenAIClient(env.API_KEY)
 	const bot = new Telegraf(env.BOT_KEY, {
 		telegram: { webhookReply },
-	});
+	})
 
-	const getSession = async (chatId: number): Promise<SessionData> => {
+	const sessionController = new SessionController(env)
+
+	bot.command('reset_sticker_pack', async (ctx) => {
 		try {
-			const data = await env.CHAT_SESSIONS_STORAGE.get(`session_${chatId}`);
-			return data ? JSON.parse(data) : { userMessages: [] };
-		} catch (e) {
-			return { userMessages: [] };
-		}
-	};
+			await sessionController.getSession(ctx.chat.id)
 
-	const saveSession = async (chatId: number, session: SessionData) => {
-		await env.CHAT_SESSIONS_STORAGE.put(
-			`session_${chatId}`,
-			JSON.stringify({
-				...session,
-				userMessages: session.userMessages.slice(-50), // Храним последние 50 сообщений
-			}),
-		);
-	};
+			await sessionController.resetStickers(ctx.chat.id)
 
-	bot.command('set_prompt', async (ctx) => {
-		try {
-			const chatId = ctx.chat.id;
-			const userMessage = ctx.message.text || '';
-
-			const newPrompt = userMessage.replace('/set_prompt', '').trim();
-
-			await savePrompt(chatId, newPrompt);
-
-			await ctx.telegram.sendMessage(chatId, 'Системный промт обновлен!');
+			await ctx.telegram.sendMessage(
+				ctx.chat.id,
+				'Стикер пак обновлен до стандартного',
+			)
 		} catch (error) {
-			console.error('Error updating prompt:', error);
+			console.error('Error updating prompt:', error)
 		}
-	});
+	})
 
-	// New function to save and load user prompts
-	const savePrompt = async (chatId: number, prompt: string) => {
-		await env.CHAT_SESSIONS_STORAGE.put(`prompt_${chatId}`, prompt);
-	};
+	bot.command('add_sticker_pack', async (ctx) => {
+		try {
+			await sessionController.getSession(ctx.chat.id)
 
-	const getPrompt = async (chatId: number): Promise<string> => {
-		return (await env.CHAT_SESSIONS_STORAGE.get(`prompt_${chatId}`)) || '';
-	};
+			await sessionController.updateSession(ctx.chat.id, {
+				stickerNotSet: true,
+			})
+
+			await ctx.telegram.sendMessage(
+				ctx.chat.id,
+				'В следующем сообщении отправьте стикер который я должен использовать',
+			)
+		} catch (error) {
+			console.error('Error updating prompt:', error)
+		}
+	})
+
+	bot.command('set_new_prompt', async (ctx) => {
+		try {
+			await sessionController.getSession(ctx.chat.id)
+
+			await sessionController.updateSession(ctx.chat.id, {
+				promptNotSet: true,
+			})
+
+			await ctx.telegram.sendMessage(
+				ctx.chat.id,
+				'В следующем сообщении отправьте системный промпт',
+			)
+		} catch (error) {
+			console.error('Error updating prompt:', error)
+		}
+	})
 
 	bot.on(message(), async (ctx) => {
 		try {
-			if (ctx.message.from.is_bot) return;
+			if (ctx.message.from.is_bot) return
 
-			const username = ctx.message.from.first_name || ctx.message.from.last_name || ctx.message.from.username || 'Anonymous';
+			const username =
+				ctx.message.from.first_name ||
+				ctx.message.from.last_name ||
+				ctx.message.from.username ||
+				'Anonymous'
 
-			const chatId = ctx.chat.id;
-			const userMessage = ('text' in ctx.message && ctx.message.text) || '';
+			const chatId = ctx.chat.id
+			const userMessage = ('text' in ctx.message && ctx.message.text) || ''
+			const isPrivate = (ctx.chat.type = 'private')
+			const isMessageToBot = !!userMessage.match(botName)
+			const shouldReply = isReply()
 
-			const sessionData = await getSession(chatId);
+			const sessionData = await sessionController.getSession(chatId)
+
+			if (sessionData.firstTime) {
+				await sessionController.updateSession(chatId, {
+					firstTime: false,
+				})
+				await ctx.telegram.sendMessage(
+					chatId,
+					`Привет, спасибо добавили меня в чат, я всегда отвечаю если вы упоминаете меня в сообщениях, а так же при любых других сообщениях с 5% шансом, для того что бы узнать команды введите /help`,
+				)
+			}
+
+			if (sessionData.promptNotSet) {
+				console.log('ctx.message; ', ctx.message)
+				await sessionController.updateSession(chatId, {
+					prompt: userMessage,
+					promptNotSet: false,
+				})
+				return await ctx.telegram.sendMessage(
+					chatId,
+					'Системный промт обновлен!',
+				)
+			}
+
+			if (sessionData.stickerNotSet) {
+				if ('sticker' in ctx.message && ctx.message.sticker?.set_name) {
+					const onlyDefault = sessionController.isOnlyDefaultStickerPack()
+
+					await sessionController.updateSession(chatId, {
+						stickersPacks: [
+							...(onlyDefault ? [] : sessionData.stickersPacks),
+							ctx.message.sticker.set_name,
+						],
+						stickerNotSet: false,
+					})
+
+					await ctx.telegram.sendMessage(chatId, 'Стикер пак был добавлен!')
+
+					return
+				} else {
+					return await ctx.telegram.sendMessage(chatId, 'Это был не стикер 😡')
+				}
+			}
+
+			if (!shouldReply && !isMessageToBot && !isPrivate) return
+
+			const currentTime = new Date()
 
 			const newMessage: ChatMessage = {
-				username,
-				content: userMessage,
-				timestamp: Date.now(),
-			};
+				name: username,
+				text: userMessage,
+				time: currentTime.toISOString(),
+			}
 
 			const recentMessages = [...sessionData.userMessages]
-				.map((m) => `${m.username}: ${m.content};`)
+				.map((m) => `${m.name}[${m.time}]: ${m.text};`)
 				.reverse()
-				.join(';');
+				.join(';')
 
-			const customPrompt = await getPrompt(chatId);
-
-			const botMind = await generateAiResponse(
-				`Пользователь ${newMessage.username} написал: ${newMessage.content}`,
+			const botMessages = await openAi(
+				`${newMessage.name}[${newMessage.time}] написал: ${newMessage.text}`,
 				recentMessages,
-				gpt.think,
-				customPrompt,
-				!!userMessage.match(botName),
-			);
+				sessionData.prompt,
+			)
 
-			await saveSession(chatId, { userMessages: [...sessionData.userMessages, newMessage] });
+			await sessionController.updateSession(chatId, {
+				userMessages: [...sessionData.userMessages, newMessage],
+			})
 
-			if (botMind.length) {
-				await delay();
+			const asyncActions = botMessages.map(async ({ content, type }) => {
+				if (type === 'emoji') {
+					const stickerSet = getRandomValueArr(sessionData.stickersPacks)
+					const response = await ctx.telegram.getStickerSet(stickerSet)
+					const stickerByEmoji = findByEmoji(
+						response.stickers as Sticker[],
+						content,
+					)
 
-				botMind.forEach(({ content, type }) => {
-					if (type === 'emoji') {
-						replyWithSticker(ctx, content);
-					} else if (type === 'text') {
-						ctx.telegram.sendMessage(chatId, content);
-					} else if (type === 'reaction') {
-						ctx.telegram.setMessageReaction(chatId, ctx.message.message_id, [
+					return ctx.telegram.sendSticker(ctx.chat.id, stickerByEmoji.file_id)
+				} else if (type === 'text') {
+					return ctx.telegram.sendMessage(chatId, content)
+				} else if (type === 'reaction') {
+					return ctx.telegram.setMessageReaction(
+						chatId,
+						ctx.message.message_id,
+						[
 							{
 								type: 'emoji',
 								emoji: content,
 							},
-						]);
-					}
-				});
+						],
+					)
+				}
+			})
 
-				await ctx.telegram.sendChatAction(chatId, 'typing');
-			}
+			await Promise.all([
+				ctx.telegram.sendChatAction(chatId, 'typing'),
+				delay,
+				...asyncActions,
+			])
 		} catch (error) {
-			console.error('Error processing message:', error);
+			console.error('Error processing message:', error)
 		}
-	});
+	})
 
-	return bot;
-};
+	return bot
+}
