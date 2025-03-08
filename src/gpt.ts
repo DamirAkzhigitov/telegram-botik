@@ -1,6 +1,5 @@
-import OpenAI from 'openai';
-import * as console from 'node:console';
-import { MessagesArray } from './types';
+import OpenAI from 'openai'
+import { MessagesArray } from './types'
 
 export const formatting = `
 Текстовыми сообщениями: . Формат: объект с type равным "text" и полем content, содержащим текстовый ответ.
@@ -24,17 +23,21 @@ export const formatting = `
 - 🤮 Vomiting face
 - 💩 Poop emoji
 - 🙏 Praying/Namaste emoji
-`;
+`
 
 export const getOpenAIClient = (key: string) => {
 	const openai = new OpenAI({
 		baseURL: 'https://openrouter.ai/api/v1',
 		apiKey: key,
-	});
+	})
 
-	async function gptApi(userMessage: string, messages: string, customPrompt: string): Promise<MessagesArray> {
+	async function gptApi(
+		userMessage: string,
+		messages: string,
+		customPrompt: string,
+	): Promise<MessagesArray> {
 		try {
-			const options = {
+			const options: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
 				model: 'google/gemini-2.0-flash-001',
 				messages: [
 					{
@@ -43,7 +46,11 @@ export const getOpenAIClient = (key: string) => {
 					},
 					{
 						role: 'system',
-						content: `${customPrompt}\n${formatting}\nистория сообщений: ${messages}`,
+						content: `${customPrompt}\n${formatting}`,
+					},
+					{
+						role: 'system',
+						content: `история сообщений: ${messages}`,
 					},
 				],
 				max_tokens: 2000,
@@ -83,23 +90,23 @@ export const getOpenAIClient = (key: string) => {
 						},
 					},
 				},
-			};
+			}
 
-			const completion = await openai.chat.completions.create(options);
+			const completion = await openai.chat.completions.create(options)
 
-			const response = JSON.parse(completion?.choices?.[0]?.message.content || '[]');
+			const response = JSON.parse(
+				completion?.choices?.[0]?.message.content || '[]',
+			)
 
-			console.log('response: ', JSON.stringify(response));
+			if (!response?.items) return []
 
-			if (!response?.items) return [];
-
-			return response.items;
+			return response.items
 		} catch (e) {
-			console.error(e);
-			return [];
+			console.error(e)
+			return []
 		}
 	}
 	return {
-		think: gptApi,
-	};
-};
+		openAi: gptApi,
+	}
+}
