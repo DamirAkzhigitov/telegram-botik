@@ -1,5 +1,4 @@
-
- # Project README
+# Project README
 
 ## Overview
 
@@ -24,12 +23,14 @@ This project is a Telegram bot built using the Telegraf framework that leverages
 ### Getting Started
 
 1. **Clone the Repository:**
+
    ```bash
    git clone https://github.com/yourusername/your-repo-name.git
    cd your-repo-name
    ```
 
 2. **Install Dependencies:**
+
    ```bash
    npm install
    ```

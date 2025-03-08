@@ -2,7 +2,7 @@ import OpenAI from 'openai'
 import { MessagesArray } from './types'
 
 export const formatting = `
-Ты участник чата (тебя зовут Иван Разумов), к тебе могут обратится либо участники могут общаться между собой форматы взаимодействия:
+Ты участник чата (тебя зовут Иван Разумов), к тебе могут обратится либо участники могут общаться между собой , ты знаешь историю чата, даты отправки сообщений и имена пользователей, ты можешь видеть картинки, форматы взаимодействия:
 Текстовыми сообщениями: объект с type равным "text" и полем content, содержащим текстовый ответ.
 Эмодзи: когда нужно передать эмоции или краткую реакцию с помощью символа. Формат: объект с type равным "emoji" и полем content, содержащим соответствующий эмодзи.
 Реакцией: когда необходимо выразить мнение или реакцию
@@ -28,87 +28,100 @@ export const formatting = `
 `
 
 export const getOpenAIClient = (key: string) => {
-	const openai = new OpenAI({
-		baseURL: 'https://openrouter.ai/api/v1',
-		apiKey: key,
-	})
+  const openai = new OpenAI({
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey: key
+  })
 
-	async function gptApi(
-		userMessage: string,
-		messages: string,
-		customPrompt: string,
-	): Promise<MessagesArray> {
-		try {
-			const options: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
-				model: 'google/gemini-2.0-flash-001',
-				messages: [
-					{
-						role: 'user',
-						content: userMessage,
-					},
-					{
-						role: 'system',
-						content: `${customPrompt}\n${formatting}`,
-					},
-					{
-						role: 'system',
-						content: `история сообщений: ${messages}`,
-					},
-				],
-				max_tokens: 4000,
-				temperature: 1,
-				presence_penalty: 0,
-				response_format: {
-					type: 'json_schema',
-					json_schema: {
-						name: 'content_list',
-						strict: true,
-						schema: {
-							type: 'object',
-							properties: {
-								items: {
-									type: 'array',
-									description: 'List of content items',
-									items: {
-										type: 'object',
-										properties: {
-											type: {
-												type: 'string',
-												enum: ['text', 'emoji', 'reaction'],
-												description: 'Type of content',
-											},
-											content: {
-												type: 'string',
-												description: 'Content data',
-											},
-										},
-										required: ['type', 'content'],
-										additionalProperties: false,
-									},
-								},
-							},
-							required: ['items'],
-							additionalProperties: false,
-						},
-					},
-				},
-			}
+  async function gptApi(
+    userMessage: string,
+    messages: string,
+    customPrompt: string,
+    imageUrl?: string
+  ): Promise<MessagesArray> {
+    try {
+      //console.log('gptApi, imageUrl: ', imageUrl)
+      const options: OpenAI.Chat.ChatCompletionCreateParams = {
+        model: 'google/gemini-2.0-flash-001',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: userMessage
+              },
+              ...((imageUrl
+                ? [
+                    {
+                      type: 'image_url',
+                      image_url: {
+                        url: imageUrl
+                      }
+                    }
+                  ]
+                : []) as any)
+            ]
+          },
+          {
+            role: 'system',
+            content: `${customPrompt}${formatting} история сообщений: ${messages}`
+          }
+        ],
+        max_tokens: 8000,
+        temperature: 1,
+        presence_penalty: 0,
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'content_list',
+            strict: true,
+            schema: {
+              type: 'object',
+              properties: {
+                items: {
+                  type: 'array',
+                  description: 'List of content items',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      type: {
+                        type: 'string',
+                        enum: ['text', 'emoji', 'reaction'],
+                        description: 'Type of content'
+                      },
+                      content: {
+                        type: 'string',
+                        description: 'Content data'
+                      }
+                    },
+                    required: ['type', 'content'],
+                    additionalProperties: false
+                  }
+                }
+              },
+              required: ['items'],
+              additionalProperties: false
+            }
+          }
+        }
+      }
 
-			const completion = await openai.chat.completions.create(options)
+      const completion = await openai.chat.completions.create(options)
 
-			const response = JSON.parse(
-				completion?.choices?.[0]?.message.content || '[]',
-			)
+      const response = JSON.parse(
+        completion?.choices?.[0]?.message.content || '[]'
+      )
 
-			if (!response?.items) return []
+      if (!response?.items) return []
 
-			return response.items
-		} catch (e) {
-			console.error(e)
-			return []
-		}
-	}
-	return {
-		openAi: gptApi,
-	}
+      return response.items
+    } catch (e) {
+      console.error(e)
+      return []
+    }
+  }
+  return {
+    openAi: gptApi
+  }
 }
