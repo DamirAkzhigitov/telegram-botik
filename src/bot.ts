@@ -40,7 +40,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
 			})
 		}
 
-		await ctx.reply(`Вы выбрали ${Number(percentage) * 100}%`)
+		await ctx.editMessageText(`Вы выбрали ${Number(percentage) * 100}%`)
 	})
 
 	bot.command('help', async (ctx) => {
@@ -124,6 +124,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
 			const isMessageToBot = !!userMessage.match(botName)
 
 			const sessionData = await sessionController.getSession(chatId)
+
 			const shouldReply = isReply(sessionData.replyChance)
 
 			if (sessionData.firstTime) {
@@ -152,11 +153,16 @@ export const createBot = async (env: Context, webhookReply = false) => {
 				if ('sticker' in ctx.message && ctx.message.sticker?.set_name) {
 					const onlyDefault = sessionController.isOnlyDefaultStickerPack()
 
+					let newPack = sessionData.stickersPacks
+
+					if (onlyDefault) {
+						newPack = [ctx.message.sticker.set_name]
+					} else {
+						newPack.push(ctx.message.sticker.set_name)
+					}
+
 					await sessionController.updateSession(chatId, {
-						stickersPacks: [
-							...(onlyDefault ? [] : sessionData.stickersPacks),
-							ctx.message.sticker.set_name,
-						],
+						stickersPacks: newPack,
 						stickerNotSet: false,
 					})
 
@@ -164,7 +170,10 @@ export const createBot = async (env: Context, webhookReply = false) => {
 
 					return
 				} else {
-					return await ctx.telegram.sendMessage(chatId, 'Это был не стикер 😡')
+					await sessionController.updateSession(chatId, {
+						stickersPacks: ['kreksshpeks'],
+						stickerNotSet: false,
+					})
 				}
 			}
 
@@ -204,6 +213,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
 
 			const asyncActions = botMessages.map(async ({ content, type }) => {
 				if (type === 'emoji') {
+					console.log('sessionData.stickersPacks :', sessionData.stickersPacks)
 					const stickerSet = getRandomValueArr(sessionData.stickersPacks)
 					const response = await ctx.telegram.getStickerSet(stickerSet)
 					const stickerByEmoji = findByEmoji(
