@@ -1,11 +1,13 @@
-import { TelegramEmoji } from 'telegraf/types'
+// In src/types.ts
 
-export interface ChatMessage {
-  name: string
-  text: string
-  time: string
+// Adding Memory interfaces
+export interface Memory {
+  content: string
+  timestamp: string
+  importance: number // 1-10 scale to prioritize memories
 }
 
+// Update SessionData interface
 export interface SessionData {
   userMessages: ChatMessage[]
   stickersPacks: string[]
@@ -14,6 +16,7 @@ export interface SessionData {
   promptNotSet: boolean
   stickerNotSet: boolean
   replyChance: string
+  memories: Memory[] // Added memories array
 }
 
 export interface Context {
@@ -40,4 +43,9 @@ export interface Message {
   content: string
 }
 
-export type MessagesArray = (Message | EmojiResponse)[]
+export interface MemoryResponse {
+  type: 'memory'
+  content: string
+}
+
+export type MessagesArray = (Message | EmojiResponse | MemoryResponse)[]
