@@ -32,7 +32,6 @@ export const createBot = async (env: Context, webhookReply = false) => {
   bot.action(['0.05', '0.25', '0.50', '0.75', '1'], async (ctx) => {
     await ctx.answerCbQuery()
     const percentage = ctx.match[0]
-
     if (ctx.chat?.id) {
       await sessionController.getSession(ctx.chat.id)
       await sessionController.updateSession(ctx.chat.id, {
@@ -46,11 +45,12 @@ export const createBot = async (env: Context, webhookReply = false) => {
     try {
       await ctx.telegram.sendMessage(
         ctx.chat.id,
-        `
-				/set_reply_chance - выберите с каким шансом бот будет отвечать
-				/reset_sticker_pack - сбросить выбор стикер паков
-				/add_sticker_pack - добавить боту новый стикер пак
-				/set_new_prompt - установить системный промпт`
+        `/set_reply_chance - выберите с каким шансом бот будет отвечать
+/reset_sticker_pack - сбросить выбор стикер паков
+/add_sticker_pack - добавить боту новый стикер пак
+/set_new_prompt - установить системный промпт
+/show_memories - показать запомненную информацию о чате
+/clear_memories - очистить все запомненные данные`
       )
     } catch (error) {
       console.error('Error help:', error)
@@ -100,6 +100,46 @@ export const createBot = async (env: Context, webhookReply = false) => {
     }
   })
 
+  bot.command('show_memories', async (ctx) => {
+    try {
+      const chatId = ctx.chat.id
+      const sessionData = await sessionController.getSession(chatId)
+
+      if (!sessionData.memories || sessionData.memories.length === 0) {
+        await ctx.telegram.sendMessage(
+          chatId,
+          'У меня пока нет сохраненных воспоминаний об этом чате.'
+        )
+        return
+      }
+
+      const memories = sessionData.memories
+        .map((memory, index) => `${index + 1}. ${memory.content}`)
+        .join('')
+
+      await ctx.telegram.sendMessage(chatId, `Вот что я запомнил:${memories}`)
+    } catch (error) {
+      console.error('Error showing memories:', error)
+    }
+  })
+
+  bot.command('clear_memories', async (ctx) => {
+    try {
+      const chatId = ctx.chat.id
+
+      await sessionController.updateSession(chatId, {
+        memories: []
+      })
+
+      await ctx.telegram.sendMessage(
+        chatId,
+        'Все сохраненные воспоминания были удалены.'
+      )
+    } catch (error) {
+      console.error('Error clearing memories:', error)
+    }
+  })
+
   bot.on(message(), async (ctx) => {
     try {
       if (ctx.message.from.is_bot) return
@@ -127,7 +167,6 @@ export const createBot = async (env: Context, webhookReply = false) => {
       }
 
       if (sessionData.promptNotSet) {
-        //console.log('ctx.message; ', ctx.message)
         await sessionController.updateSession(chatId, {
           prompt: userMessage,
           promptNotSet: false
@@ -166,27 +205,20 @@ export const createBot = async (env: Context, webhookReply = false) => {
       if (!shouldReply && !isMessageToBot && !isPrivate) return
 
       let image = ''
-
-      //console.log('ctx.message: ', ctx.message)
-
       if ('photo' in ctx.message) {
-        //console.log('photo in message')
         const instance = axios.create({
           baseURL: 'https://api.telegram.org/',
           timeout: 1000
         })
-
         const photo = ctx.message.photo
         // Get the highest resolution photo available
         const fileId = photo[photo.length - 1].file_id
         const file = await bot.telegram.getFile(fileId)
         const downloadLink = `file/bot${env.BOT_KEY}/${file.file_path}`
-
         try {
           const response = await instance.get(downloadLink, {
             responseType: 'arraybuffer'
           })
-          //console.log(response)
           const base64Image = Buffer.from(response.data).toString('base64')
           image = `data:image/jpeg;base64,${base64Image}`
         } catch (e) {
@@ -195,12 +227,16 @@ export const createBot = async (env: Context, webhookReply = false) => {
       }
 
       const currentTime = new Date()
-
       const newMessage: ChatMessage = {
         name: username,
         text: ctx.message?.caption || userMessage,
         time: currentTime.toISOString()
       }
+
+      const formattedMemories =
+        sessionData.memories?.length > 0
+          ? sessionController.getFormattedMemories()
+          : ''
 
       const recentMessages = [...sessionData.userMessages]
         .map((m) => `${m.name}[${m.time}]: ${m.text};`)
@@ -211,11 +247,27 @@ export const createBot = async (env: Context, webhookReply = false) => {
         `${newMessage.name}[${newMessage.time}] написал: ${newMessage.text}`,
         recentMessages,
         sessionData.prompt,
-        image
+        image,
+        formattedMemories
       )
 
+      const memoryItems = botMessages.filter((item) => item.type === 'memory')
+      if (memoryItems.length > 0) {
+        for (const memoryItem of memoryItems) {
+          if (memoryItem.type === 'memory') {
+            await sessionController.addMemory(
+              chatId,
+              memoryItem.content,
+              8 // default high importance for AI-identified memories
+            )
+          }
+        }
+      }
+
+      const responseMessages = botMessages.filter((item) => item.type !== 'memory')
+
       const botHistory = {
-        text: botMessages
+        text: responseMessages
           .filter(({ type }) => type === 'text')
           .map(({ content }) => content)
           .join(''),
@@ -227,7 +279,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
         userMessages: [...sessionData.userMessages, newMessage, botHistory]
       })
 
-      const asyncActions = botMessages.map(async ({ content, type }) => {
+      const asyncActions = responseMessages.map(async ({ content, type }) => {
         if (type === 'emoji') {
           const stickerSet = getRandomValueArr(sessionData.stickersPacks)
           const response = await ctx.telegram.getStickerSet(stickerSet)
