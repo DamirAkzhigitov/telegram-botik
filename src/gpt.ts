@@ -1,5 +1,141 @@
 import OpenAI from 'openai'
 import { MessagesArray } from './types'
 
-export const formatting = `Ты участник чата (тебя зовут Иван Разумов), к тебе могут обратится либо участники могут общаться между собой , ты знаешь историю чата, даты отправки сообщений и имена пользователей, ты можешь видеть картинки, форматы взаимодействия:
-Текстовыми сообщениями: объект с type равным \
+export const formatting = `
+Ты участник чата (тебя зовут Иван Разумов), к тебе могут обратится либо участники могут общаться между собой , ты знаешь историю чата, даты отправки сообщений и имена пользователей, ты можешь видеть картинки, форматы взаимодействия:
+Текстовыми сообщениями: объект с type равным "text" и полем content, содержащим текстовый ответ.
+Эмодзи: когда нужно передать эмоции или краткую реакцию с помощью символа. Формат: объект с type равным "emoji" и полем content, содержащим соответствующий эмодзи.
+Реакцией: когда необходимо выразить мнение или реакцию
+ Формат: объект с type равным "reaction" и полем content, содержащим название реакции.
+
+ Также у тебя есть функция запоминания важной информации:
+Ты можешь сохранять важные факты или имена людей, используя объект с type равным \\"memory\\" и полем content, в котором надо записать сам факт. Запоминай только значимую информацию, такую как:
+- Имена, фамилии и прозвища людей
+- Важные факты о людях и их отношениях
+- Предпочтения и интересы собеседников
+- Ключевые события и информацию, которая может быть полезна в будущих беседах
+
+Вы можете использовать следующие реакции в ответ на сообщения собеседника
+👍 Thumbs up
+- 👎 Thumbs down
+- ❤️ Red heart
+- 🔥 Fire
+- 🥰 Smiling face with 3 hearts
+- 👏 Clap
+- 😁 Big smile
+- 🤔 Thinking face
+- 🤯 Exploding head
+- 😱 Face screaming in fear
+- 🤬 Abusing face
+- 😢 Crying face
+- 🎉 Party popper
+- 🤩 Star-struck
+- 🤮 Vomiting face
+- 💩 Poop emoji
+- 🙏 Praying/Namaste emoji
+`
+
+export const getOpenAIClient = (key: string) => {
+  const openai = new OpenAI({
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey: key
+  })
+
+  async function gptApi(
+    userMessage: string,
+    messages: string,
+    customPrompt: string,
+    imageUrl?: string,
+    memories?: string
+  ): Promise<MessagesArray> {
+    try {
+      const memoryContext = memories
+        ? `\nВажная информация о пользователях: ${memories}`
+        : ''
+      //console.log('gptApi, imageUrl: ', imageUrl)
+      const options: OpenAI.Chat.ChatCompletionCreateParams = {
+        model: 'google/gemini-2.0-flash-001',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: userMessage
+              },
+              ...((imageUrl
+                ? [
+                    {
+                      type: 'image_url',
+                      image_url: {
+                        url: imageUrl
+                      }
+                    }
+                  ]
+                : []) as any)
+            ]
+          },
+          {
+            role: 'system',
+            content: `${customPrompt}${formatting} история сообщений: ${messages}${memoryContext}`
+          }
+        ],
+        max_tokens: 8000,
+        temperature: 1,
+        presence_penalty: 0,
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'content_list',
+            strict: true,
+            schema: {
+              type: 'object',
+              properties: {
+                items: {
+                  type: 'array',
+                  description: 'List of content items',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      type: {
+                        type: 'string',
+                        enum: ['text', 'emoji', 'reaction', 'memory'],
+                        description: 'Type of content'
+                      },
+                      content: {
+                        type: 'string',
+                        description: 'Content data'
+                      }
+                    },
+                    required: ['type', 'content'],
+                    additionalProperties: false
+                  }
+                }
+              },
+              required: ['items'],
+              additionalProperties: false
+            }
+          }
+        }
+      }
+
+      const completion = await openai.chat.completions.create(options)
+
+      const response = JSON.parse(
+        completion?.choices?.[0]?.message.content || '[]'
+      )
+
+      if (!response?.items) return []
+
+      console.log('response.items: ', JSON.stringify(response.items))
+
+      return response.items
+    } catch (e) {
+      console.error(e)
+      return []
+    }
+  }
+  return {
+    openAi: gptApi
+  }
+}

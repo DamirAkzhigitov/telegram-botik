@@ -46,11 +46,11 @@ export const createBot = async (env: Context, webhookReply = false) => {
       await ctx.telegram.sendMessage(
         ctx.chat.id,
         `/set_reply_chance - выберите с каким шансом бот будет отвечать
-/reset_sticker_pack - сбросить выбор стикер паков
-/add_sticker_pack - добавить боту новый стикер пак
-/set_new_prompt - установить системный промпт
-/show_memories - показать запомненную информацию о чате
-/clear_memories - очистить все запомненные данные`
+							/reset_sticker_pack - сбросить выбор стикер паков
+							/add_sticker_pack - добавить боту новый стикер пак
+							/set_new_prompt - установить системный промпт
+							/show_memories - показать запомненную информацию о чате
+							/clear_memories - очистить все запомненные данные`
       )
     } catch (error) {
       console.error('Error help:', error)
@@ -264,7 +264,9 @@ export const createBot = async (env: Context, webhookReply = false) => {
         }
       }
 
-      const responseMessages = botMessages.filter((item) => item.type !== 'memory')
+      const responseMessages = botMessages.filter(
+        (item) => item.type !== 'memory'
+      )
 
       const botHistory = {
         text: responseMessages

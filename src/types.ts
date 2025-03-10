@@ -1,4 +1,14 @@
-// In src/types.ts
+import { TelegramEmoji } from 'telegraf/types'
+
+export interface MemoryResponse {
+  type: 'memory'
+  content: string
+}
+export interface ChatMessage {
+  name: string
+  text: string
+  time: string
+}
 
 // Adding Memory interfaces
 export interface Memory {

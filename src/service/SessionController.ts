@@ -31,6 +31,9 @@ export class SessionController {
     try {
       const data = await this.env.CHAT_SESSIONS_STORAGE.get(`session_${chatId}`)
       if (data) this.session = JSON.parse(data)
+      if (!('memories' in this.session)) {
+        Object.assign(this.session, { memories: [] })
+      }
       return this.session
     } catch (e) {
       console.error('getSession error', e)
@@ -82,6 +85,8 @@ export class SessionController {
       timestamp: new Date().toISOString(),
       importance
     }
+
+    console.log('addMemory, memory: ', memory)
 
     // Get current memories and add the new one
     const session = await this.getSession(chatId)
