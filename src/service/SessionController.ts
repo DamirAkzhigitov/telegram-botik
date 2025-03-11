@@ -1,4 +1,4 @@
-import { Context, SessionData } from '../types'
+import { Context, Memory, SessionData } from '../types'
 
 const defaultStickerPack = 'kreksshpeks'
 
@@ -14,7 +14,8 @@ export class SessionController {
       firstTime: true,
       promptNotSet: false,
       stickerNotSet: false,
-      replyChance: '1'
+      replyChance: '1',
+      memories: [] // Initialize empty memories array
     }
     this.env = env
   }
@@ -30,7 +31,9 @@ export class SessionController {
     try {
       const data = await this.env.CHAT_SESSIONS_STORAGE.get(`session_${chatId}`)
       if (data) this.session = JSON.parse(data)
-
+      if (!('memories' in this.session)) {
+        Object.assign(this.session, { memories: [] })
+      }
       return this.session
     } catch (e) {
       console.error('getSession error', e)
@@ -69,5 +72,42 @@ export class SessionController {
     } catch (e) {
       console.error('resetStickers', e)
     }
+  }
+
+  // Add memory management functions
+  async addMemory(
+    chatId: string | number,
+    content: string,
+    importance: number = 5
+  ): Promise<void> {
+    const memory: Memory = {
+      content,
+      timestamp: new Date().toISOString(),
+      importance
+    }
+
+    // Get current memories and add the new one
+    const session = await this.getSession(chatId)
+    const memories = [...session.memories, memory]
+
+    // Sort by importance (highest first)
+    memories.sort((a, b) => b.importance - a.importance)
+
+    // Limit to a reasonable number (e.g., 50)
+    const limitedMemories = memories.slice(0, 50)
+
+    await this.updateSession(chatId, { memories: limitedMemories })
+  }
+
+  // Get formatted memories for context
+  getFormattedMemories(): string {
+    if (!this.session.memories || this.session.memories.length === 0) {
+      return ''
+    }
+
+    return (
+      'Important information to remember:' +
+      this.session.memories.map((memory) => `- ${memory.content}`).join('')
+    )
   }
 }
