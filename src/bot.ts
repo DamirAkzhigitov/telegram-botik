@@ -127,6 +127,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
     try {
       const chatId = ctx.chat.id
 
+      await sessionController.getSession(ctx.chat.id)
       await sessionController.updateSession(chatId, {
         memories: []
       })
@@ -240,7 +241,6 @@ export const createBot = async (env: Context, webhookReply = false) => {
 
       const recentMessages = [...sessionData.userMessages]
         .map((m) => `${m.name}[${m.time}]: ${m.text};`)
-        .reverse()
         .join(';')
 
       const botMessages = await openAi(
@@ -278,7 +278,11 @@ export const createBot = async (env: Context, webhookReply = false) => {
       }
 
       await sessionController.updateSession(chatId, {
-        userMessages: [...sessionData.userMessages, newMessage, botHistory]
+        userMessages: [
+          newMessage,
+          ...(botHistory.text ? [botHistory] : []),
+          ...sessionData.userMessages.slice(0, 20)
+        ]
       })
 
       const asyncActions = responseMessages.map(async ({ content, type }) => {

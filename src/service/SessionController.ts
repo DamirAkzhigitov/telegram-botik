@@ -86,8 +86,6 @@ export class SessionController {
       importance
     }
 
-    console.log('addMemory, memory: ', memory)
-
     // Get current memories and add the new one
     const session = await this.getSession(chatId)
     const memories = [...session.memories, memory]
