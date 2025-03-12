@@ -58,7 +58,7 @@ export const getOpenAIClient = (key: string) => {
       const memoryContext = memories ? `\nВажная информация: ${memories}` : ''
       //console.log('gptApi, imageUrl: ', imageUrl)
       const options: OpenAI.Chat.ChatCompletionCreateParams = {
-        model: 'google/gemini-2.0-flash-001',
+        model: 'google/gemini-2.0-pro-exp-02-05:free',
         messages: [
           {
             role: 'user',
@@ -86,7 +86,7 @@ export const getOpenAIClient = (key: string) => {
         ],
         max_tokens: 8000,
         temperature: 0.5,
-        presence_penalty: 0.5,
+        // presence_penalty: 0.5,
         response_format: {
           type: 'json_schema',
           json_schema: {

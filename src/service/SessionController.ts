@@ -1,6 +1,6 @@
 import { Context, Memory, SessionData } from '../types'
 
-const defaultStickerPack = 'kreksshpeks'
+const defaultStickerPack = 'gufenpchela'
 
 export class SessionController {
   session: SessionData

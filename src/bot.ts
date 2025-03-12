@@ -45,12 +45,17 @@ export const createBot = async (env: Context, webhookReply = false) => {
     try {
       await ctx.telegram.sendMessage(
         ctx.chat.id,
-        `/set_reply_chance - выберите с каким шансом бот будет отвечать
-							/reset_sticker_pack - сбросить выбор стикер паков
-							/add_sticker_pack - добавить боту новый стикер пак
-							/set_new_prompt - установить системный промпт
-							/show_memories - показать запомненную информацию о чате
-							/clear_memories - очистить все запомненные данные`
+        `
+/help — показать список доступных команд.
+/set_new_prompt — установить новый промпт для бота.
+/add_sticker_pack — добавить новый стикер-пак.
+/reset_sticker_pack — сбросить текущий стикер-пак.
+/set_reply_chance — установить вероятность, с которой бот будет отвечать на сообщения.
+/show_memories — показать сохранённую информацию о чате.
+/clear_memories — удалить все сохранённые данные о чате.
+/clear_messages — очистить историю сообщений.
+/get_prompt — вывести текущий установленный промпт.
+				`
       )
     } catch (error) {
       console.error('Error help:', error)
@@ -82,6 +87,31 @@ export const createBot = async (env: Context, webhookReply = false) => {
       )
     } catch (error) {
       console.error('Error add_sticker_pack:', error)
+    }
+  })
+
+  bot.command('clear_messages', async (ctx) => {
+    try {
+      await sessionController.getSession(ctx.chat.id)
+      await sessionController.updateSession(ctx.chat.id, {
+        userMessages: []
+      })
+      await ctx.telegram.sendMessage(ctx.chat.id, 'История сообщений очищена')
+    } catch (error) {
+      console.error('Error clear_messages:', error)
+    }
+  })
+
+  bot.command('get_prompt', async (ctx) => {
+    try {
+      const sessionData = await sessionController.getSession(ctx.chat.id)
+
+      await ctx.telegram.sendMessage(
+        ctx.chat.id,
+        `Текущий промпт: ${sessionData.prompt}`
+      )
+    } catch (error) {
+      console.error('Error get_prompt:', error)
     }
   })
 
@@ -197,7 +227,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
           return
         } else {
           await sessionController.updateSession(chatId, {
-            stickersPacks: ['kreksshpeks'],
+            stickersPacks: ['gufenpchela'],
             stickerNotSet: false
           })
         }
