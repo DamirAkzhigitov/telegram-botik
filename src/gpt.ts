@@ -56,7 +56,7 @@ export const getOpenAIClient = (key: string) => {
   ): Promise<MessagesArray> {
     try {
       const memoryContext = memories ? `\nВажная информация: ${memories}` : ''
-      //console.log('gptApi, imageUrl: ', imageUrl)
+
       const options: OpenAI.Chat.ChatCompletionCreateParams = {
         model: 'google/gemini-2.0-pro-exp-02-05:free',
         messages: [
@@ -130,8 +130,6 @@ export const getOpenAIClient = (key: string) => {
       )
 
       if (!response?.items) return []
-
-      console.log('response.items: ', JSON.stringify(response.items))
 
       return response.items
     } catch (e) {
