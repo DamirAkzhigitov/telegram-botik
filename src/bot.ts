@@ -1,174 +1,23 @@
 import { getOpenAIClient } from './gpt'
-import { Telegraf, Markup } from 'telegraf'
+import { Telegraf } from 'telegraf'
 import { message } from 'telegraf/filters'
 import { delay, findByEmoji, getRandomValueArr, isReply } from './utils'
 import { ChatMessage, Context, Sticker } from './types'
 import { SessionController } from './service/SessionController'
-import { toBase64 } from 'openai/core'
+
 import axios from 'axios'
+import commands from './commands'
 
 const botName = '@nairbru007bot'
 
 export const createBot = async (env: Context, webhookReply = false) => {
   const { openAi } = getOpenAIClient(env.API_KEY)
-  const bot = new Telegraf(env.BOT_KEY, {
-    telegram: { webhookReply }
-  })
+
+  const bot = new Telegraf(env.BOT_KEY, { telegram: { webhookReply } })
   const sessionController = new SessionController(env)
 
-  bot.command('set_reply_chance', async (ctx) => {
-    const keyboard = Markup.inlineKeyboard([
-      [
-        Markup.button.callback('5%', '0.05'),
-        Markup.button.callback('25%', '0.25'),
-        Markup.button.callback('50%', '0.50'),
-        Markup.button.callback('75%', '0.75'),
-        Markup.button.callback('100%', '1')
-      ]
-    ])
-    await ctx.reply('Вероятность ответа:', keyboard)
-  })
-
-  bot.action(['0.05', '0.25', '0.50', '0.75', '1'], async (ctx) => {
-    await ctx.answerCbQuery()
-    const percentage = ctx.match[0]
-    if (ctx.chat?.id) {
-      await sessionController.getSession(ctx.chat.id)
-      await sessionController.updateSession(ctx.chat.id, {
-        replyChance: percentage
-      })
-    }
-    await ctx.editMessageText(`Вы выбрали ${Number(percentage) * 100}%`)
-  })
-
-  bot.command('help', async (ctx) => {
-    try {
-      await ctx.telegram.sendMessage(
-        ctx.chat.id,
-        `
-/help — показать список доступных команд.
-/set_new_prompt — установить новый промпт для бота.
-/add_sticker_pack — добавить новый стикер-пак.
-/reset_sticker_pack — сбросить текущий стикер-пак.
-/set_reply_chance — установить вероятность, с которой бот будет отвечать на сообщения.
-/show_memories — показать сохранённую информацию о чате.
-/clear_memories — удалить все сохранённые данные о чате.
-/clear_messages — очистить историю сообщений.
-/get_prompt — вывести текущий установленный промпт.
-				`
-      )
-    } catch (error) {
-      console.error('Error help:', error)
-    }
-  })
-
-  bot.command('reset_sticker_pack', async (ctx) => {
-    try {
-      await sessionController.getSession(ctx.chat.id)
-      await sessionController.resetStickers(ctx.chat.id)
-      await ctx.telegram.sendMessage(
-        ctx.chat.id,
-        'Стикер пак обновлен до стандартного'
-      )
-    } catch (error) {
-      console.error('Error reset_sticker_pack:', error)
-    }
-  })
-
-  bot.command('add_sticker_pack', async (ctx) => {
-    try {
-      await sessionController.getSession(ctx.chat.id)
-      await sessionController.updateSession(ctx.chat.id, {
-        stickerNotSet: true
-      })
-      await ctx.telegram.sendMessage(
-        ctx.chat.id,
-        'В следующем сообщении отправьте стикер который я должен использовать'
-      )
-    } catch (error) {
-      console.error('Error add_sticker_pack:', error)
-    }
-  })
-
-  bot.command('clear_messages', async (ctx) => {
-    try {
-      await sessionController.getSession(ctx.chat.id)
-      await sessionController.updateSession(ctx.chat.id, {
-        userMessages: []
-      })
-      await ctx.telegram.sendMessage(ctx.chat.id, 'История сообщений очищена')
-    } catch (error) {
-      console.error('Error clear_messages:', error)
-    }
-  })
-
-  bot.command('get_prompt', async (ctx) => {
-    try {
-      const sessionData = await sessionController.getSession(ctx.chat.id)
-
-      await ctx.telegram.sendMessage(
-        ctx.chat.id,
-        `Текущий промпт: ${sessionData.prompt}`
-      )
-    } catch (error) {
-      console.error('Error get_prompt:', error)
-    }
-  })
-
-  bot.command('set_new_prompt', async (ctx) => {
-    try {
-      await sessionController.getSession(ctx.chat.id)
-      await sessionController.updateSession(ctx.chat.id, {
-        promptNotSet: true
-      })
-      await ctx.telegram.sendMessage(
-        ctx.chat.id,
-        'В следующем сообщении отправьте системный промпт'
-      )
-    } catch (error) {
-      console.error('Error updating prompt:', error)
-    }
-  })
-
-  bot.command('show_memories', async (ctx) => {
-    try {
-      const chatId = ctx.chat.id
-      const sessionData = await sessionController.getSession(chatId)
-
-      if (!sessionData.memories || sessionData.memories.length === 0) {
-        await ctx.telegram.sendMessage(
-          chatId,
-          'У меня пока нет сохраненных воспоминаний об этом чате.'
-        )
-        return
-      }
-
-      const memories = sessionData.memories
-        .map((memory, index) => `${index + 1}. ${memory.content}`)
-        .join('')
-
-      await ctx.telegram.sendMessage(chatId, `Вот что я запомнил:${memories}`)
-    } catch (error) {
-      console.error('Error showing memories:', error)
-    }
-  })
-
-  bot.command('clear_memories', async (ctx) => {
-    try {
-      const chatId = ctx.chat.id
-
-      await sessionController.getSession(ctx.chat.id)
-      await sessionController.updateSession(chatId, {
-        memories: []
-      })
-
-      await ctx.telegram.sendMessage(
-        chatId,
-        'Все сохраненные воспоминания были удалены.'
-      )
-    } catch (error) {
-      console.error('Error clearing memories:', error)
-    }
+  commands.forEach((command) => {
+    command(bot, sessionController)
   })
 
   bot.on(message(), async (ctx) => {
@@ -182,10 +31,9 @@ export const createBot = async (env: Context, webhookReply = false) => {
         'Anonymous'
       const chatId = ctx.chat.id
       const userMessage = ('text' in ctx.message && ctx.message.text) || ''
-      const isPrivate = false // (ctx.chat.type = 'private')
-      const isMessageToBot = !!userMessage.match(botName)
       const sessionData = await sessionController.getSession(chatId)
-      const shouldReply = isReply(sessionData.replyChance)
+      const shouldReply =
+        isReply(sessionData.replyChance) || !!userMessage.match(botName)
 
       if (sessionData.firstTime) {
         await sessionController.updateSession(chatId, {
@@ -233,8 +81,6 @@ export const createBot = async (env: Context, webhookReply = false) => {
         }
       }
 
-      if (!shouldReply && !isMessageToBot && !isPrivate) return
-
       let image = ''
       if ('photo' in ctx.message) {
         const instance = axios.create({
@@ -258,6 +104,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
       }
 
       const currentTime = new Date()
+
       const newMessage: ChatMessage = {
         name: username,
         text: ctx.message?.caption || userMessage,
@@ -282,16 +129,9 @@ export const createBot = async (env: Context, webhookReply = false) => {
       )
 
       const memoryItems = botMessages.filter((item) => item.type === 'memory')
-      if (memoryItems.length > 0) {
-        for (const memoryItem of memoryItems) {
-          if (memoryItem.type === 'memory') {
-            await sessionController.addMemory(
-              chatId,
-              memoryItem.content,
-              8 // default high importance for AI-identified memories
-            )
-          }
-        }
+
+      for (const memoryItem of memoryItems) {
+        await sessionController.addMemory(chatId, memoryItem.content)
       }
 
       const responseMessages = botMessages.filter(
@@ -310,13 +150,13 @@ export const createBot = async (env: Context, webhookReply = false) => {
       await sessionController.updateSession(chatId, {
         userMessages: [
           newMessage,
-          ...(botHistory.text ? [botHistory] : []),
+          ...(botHistory.text && shouldReply ? [botHistory] : []),
           ...sessionData.userMessages.slice(0, 20)
         ]
       })
 
       const asyncActions = responseMessages.map(async ({ content, type }) => {
-        if (type === 'emoji') {
+        if (type === 'emoji' && shouldReply) {
           const stickerSet = getRandomValueArr(sessionData.stickersPacks)
           const response = await ctx.telegram.getStickerSet(stickerSet)
           const stickerByEmoji = findByEmoji(
@@ -324,7 +164,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
             content
           )
           return ctx.telegram.sendSticker(ctx.chat.id, stickerByEmoji.file_id)
-        } else if (type === 'text') {
+        } else if (type === 'text' && shouldReply) {
           return ctx.telegram.sendMessage(chatId, content)
         } else if (type === 'reaction') {
           return ctx.telegram.setMessageReaction(
@@ -341,7 +181,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
       })
 
       await Promise.all([
-        ctx.telegram.sendChatAction(chatId, 'typing'),
+        ...(shouldReply ? [ctx.telegram.sendChatAction(chatId, 'typing')] : []),
         delay,
         ...asyncActions
       ])

@@ -10,14 +10,11 @@ export interface ChatMessage {
   time: string
 }
 
-// Adding Memory interfaces
 export interface Memory {
   content: string
   timestamp: string
-  importance: number // 1-10 scale to prioritize memories
 }
 
-// Update SessionData interface
 export interface SessionData {
   userMessages: ChatMessage[]
   stickersPacks: string[]
