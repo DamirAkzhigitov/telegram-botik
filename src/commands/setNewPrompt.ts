@@ -18,5 +18,4 @@ export function setNewPrompt (
       console.error('Error updating prompt:', error)
     }
   })
-
 }

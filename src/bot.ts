@@ -31,10 +31,9 @@ export const createBot = async (env: Context, webhookReply = false) => {
         'Anonymous'
       const chatId = ctx.chat.id
       const userMessage = ('text' in ctx.message && ctx.message.text) || ''
-      const isPrivate = false // (ctx.chat.type = 'private')
-      const isMessageToBot = !!userMessage.match(botName)
       const sessionData = await sessionController.getSession(chatId)
-      const shouldReply = isReply(sessionData.replyChance)
+      const shouldReply =
+        isReply(sessionData.replyChance) || !!userMessage.match(botName)
 
       if (sessionData.firstTime) {
         await sessionController.updateSession(chatId, {
@@ -82,8 +81,6 @@ export const createBot = async (env: Context, webhookReply = false) => {
         }
       }
 
-      if (!shouldReply && !isMessageToBot && !isPrivate) return
-
       let image = ''
       if ('photo' in ctx.message) {
         const instance = axios.create({
@@ -107,6 +104,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
       }
 
       const currentTime = new Date()
+
       const newMessage: ChatMessage = {
         name: username,
         text: ctx.message?.caption || userMessage,
@@ -131,16 +129,9 @@ export const createBot = async (env: Context, webhookReply = false) => {
       )
 
       const memoryItems = botMessages.filter((item) => item.type === 'memory')
-      if (memoryItems.length > 0) {
-        for (const memoryItem of memoryItems) {
-          if (memoryItem.type === 'memory') {
-            await sessionController.addMemory(
-              chatId,
-              memoryItem.content,
-              8 // default high importance for AI-identified memories
-            )
-          }
-        }
+
+      for (const memoryItem of memoryItems) {
+        await sessionController.addMemory(chatId, memoryItem.content)
       }
 
       const responseMessages = botMessages.filter(
@@ -159,13 +150,13 @@ export const createBot = async (env: Context, webhookReply = false) => {
       await sessionController.updateSession(chatId, {
         userMessages: [
           newMessage,
-          ...(botHistory.text ? [botHistory] : []),
+          ...(botHistory.text && shouldReply ? [botHistory] : []),
           ...sessionData.userMessages.slice(0, 20)
         ]
       })
 
       const asyncActions = responseMessages.map(async ({ content, type }) => {
-        if (type === 'emoji') {
+        if (type === 'emoji' && shouldReply) {
           const stickerSet = getRandomValueArr(sessionData.stickersPacks)
           const response = await ctx.telegram.getStickerSet(stickerSet)
           const stickerByEmoji = findByEmoji(
@@ -173,7 +164,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
             content
           )
           return ctx.telegram.sendSticker(ctx.chat.id, stickerByEmoji.file_id)
-        } else if (type === 'text') {
+        } else if (type === 'text' && shouldReply) {
           return ctx.telegram.sendMessage(chatId, content)
         } else if (type === 'reaction') {
           return ctx.telegram.setMessageReaction(
@@ -190,7 +181,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
       })
 
       await Promise.all([
-        ctx.telegram.sendChatAction(chatId, 'typing'),
+        ...(shouldReply ? [ctx.telegram.sendChatAction(chatId, 'typing')] : []),
         delay,
         ...asyncActions
       ])

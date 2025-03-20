@@ -15,7 +15,7 @@ export class SessionController {
       promptNotSet: false,
       stickerNotSet: false,
       replyChance: '1',
-      memories: [] // Initialize empty memories array
+      memories: []
     }
     this.env = env
   }
@@ -74,32 +74,17 @@ export class SessionController {
     }
   }
 
-  // Add memory management functions
-  async addMemory(
-    chatId: string | number,
-    content: string,
-    importance: number = 5
-  ): Promise<void> {
+  async addMemory(chatId: string | number, content: string): Promise<void> {
     const memory: Memory = {
       content,
-      timestamp: new Date().toISOString(),
-      importance
+      timestamp: new Date().toISOString()
     }
 
-    // Get current memories and add the new one
-    const session = await this.getSession(chatId)
-    const memories = [...session.memories, memory]
+    const memories = [memory, ...this.session.memories]
 
-    // Sort by importance (highest first)
-    memories.sort((a, b) => b.importance - a.importance)
-
-    // Limit to a reasonable number (e.g., 50)
-    const limitedMemories = memories.slice(0, 50)
-
-    await this.updateSession(chatId, { memories: limitedMemories })
+    await this.updateSession(chatId, { memories: memories.slice(0, 50) })
   }
 
-  // Get formatted memories for context
   getFormattedMemories(): string {
     if (!this.session.memories || this.session.memories.length === 0) {
       return ''

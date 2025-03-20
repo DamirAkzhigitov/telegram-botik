@@ -16,5 +16,4 @@ export function getPrompt (
       console.error('Error get_prompt:', error)
     }
   })
-
 }
