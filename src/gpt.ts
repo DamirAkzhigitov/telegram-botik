@@ -58,7 +58,7 @@ export const getOpenAIClient = (key: string) => {
       const memoryContext = memories ? `\nВажная информация: ${memories}` : ''
 
       const options: OpenAI.Chat.ChatCompletionCreateParams = {
-        model: 'google/gemini-2.0-pro-exp-02-05:free',
+        model: 'google/gemini-2.0-flash-lite-001',
         messages: [
           {
             role: 'user',
