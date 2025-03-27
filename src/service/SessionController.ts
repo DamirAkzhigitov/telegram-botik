@@ -1,4 +1,4 @@
-import { Context, Memory, SessionData } from '../types'
+import { Context, SessionData } from '../types'
 
 const defaultStickerPack = 'gufenpchela'
 
@@ -10,12 +10,12 @@ export class SessionController {
     this.session = {
       userMessages: [],
       stickersPacks: [defaultStickerPack],
-      prompt: '',
-      firstTime: true,
-      promptNotSet: false,
-      stickerNotSet: false,
-      replyChance: '1',
-      memories: []
+      // prompt: '',
+      // firstTime: true,
+      // promptNotSet: false,
+      stickerNotSet: false
+      // replyChance: '1',
+      // memories: []
     }
     this.env = env
   }
@@ -49,6 +49,7 @@ export class SessionController {
       ...this.session,
       ...value
     }
+    console.log('newSession: ', JSON.stringify(newSession))
     try {
       this.session = newSession
       await this.env.CHAT_SESSIONS_STORAGE.put(
@@ -75,24 +76,25 @@ export class SessionController {
   }
 
   async addMemory(chatId: string | number, content: string): Promise<void> {
-    const memory: Memory = {
-      content,
-      timestamp: new Date().toISOString()
-    }
-
-    const memories = [memory, ...this.session.memories]
-
-    await this.updateSession(chatId, { memories: memories.slice(0, 50) })
+    // const memory: Memory = {
+    //   content,
+    //   timestamp: new Date().toISOString()
+    // }
+    //
+    // const memories = [memory, ...this.session.memories]
+    //
+    // await this.updateSession(chatId, { memories: memories.slice(0, 50) })
   }
 
   getFormattedMemories(): string {
-    if (!this.session.memories || this.session.memories.length === 0) {
-      return ''
-    }
-
-    return (
-      'Important information to remember:' +
-      this.session.memories.map((memory) => `- ${memory.content}`).join('')
-    )
+    return ''
+    // if (!this.session.memories || this.session.memories.length === 0) {
+    //   return ''
+    // }
+    //
+    // return (
+    //   'Important information to remember:' +
+    //   this.session.memories.map((memory) => `- ${memory.content}`).join('')
+    // )
   }
 }
