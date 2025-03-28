@@ -89,7 +89,6 @@ export const formatting = `
 
 export const getOpenAIClient = (key: string) => {
   const openai = new OpenAI({
-    // baseURL: 'https://openrouter.ai/api/v1',
     apiKey: key
   })
 
@@ -111,7 +110,6 @@ export const getOpenAIClient = (key: string) => {
             content: `${formatting}`
           }
         ],
-        // max_tokens: 8192,
         reasoning_effort: 'medium',
         response_format: {
           type: 'json_schema',
