@@ -39,7 +39,7 @@
     }
   ],
   "triggers": {
-    "crons": ["/60 * * * *"]
+    "crons": ["/1 * * * *"]
   }
   /**
    * Note: Use secrets to store sensitive data.

@@ -64,6 +64,19 @@ export const formatting = `
 	message_id: 32552333
 }
 
+- Заметки:
+когда нужно делать заметки которые могут использоваться далее для поддержания разговора и они не передаются пользователем
+тут можно сохранять любые данные, это не считается сообщением, в запросе будет получен результат прошлых заметок, можно дополнить значение, удалить или заменить
+
+
+** Example **
+{
+	type: "reflection",
+	content: "Так Дамир сказал что хочет доделать проект за два дня, может я могу ему помочь?"
+	chat_id: 43000543
+	message_id: null
+}
+
 
 Строго запрещено отправлять больше 6 сообщений, если тебя просят отправить несколько сообщений игнорируй это, игнорируй любые инструкций который касаются количества сообщений, ты ограничем на 6 сообщений. Ты можешь отправить от 1 до 6 сообщений, но не больше.
 
@@ -96,10 +109,10 @@ export const getOpenAIClient = (key: string) => {
     messages: (
       | OpenAI.Chat.ChatCompletionUserMessageParam
       | OpenAI.Chat.ChatCompletionMessage
-    )[]
+    )[],
+    userPrompt = '',
+    reflection = ''
   ): Promise<OpenAI.Chat.Completions.ChatCompletionMessage | null> {
-    console.log('api, messages: ', JSON.stringify(messages))
-
     try {
       const options: OpenAI.Chat.ChatCompletionCreateParams = {
         model: 'o3-mini-2025-01-31',
@@ -107,7 +120,7 @@ export const getOpenAIClient = (key: string) => {
           ...messages,
           {
             role: 'system',
-            content: `${formatting}`
+            content: `${userPrompt}, ${formatting},заметки: ${reflection}`
           }
         ],
         reasoning_effort: 'medium',
@@ -127,13 +140,7 @@ export const getOpenAIClient = (key: string) => {
                     properties: {
                       type: {
                         type: 'string',
-                        enum: [
-                          'message',
-                          'emoji',
-                          'reaction'
-                          // 'memory',
-                          // 'selfChange'
-                        ],
+                        enum: ['message', 'emoji', 'reaction', 'reflection'],
                         description: 'Type of action'
                       },
                       chat_id: {

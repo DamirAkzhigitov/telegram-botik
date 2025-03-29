@@ -15,7 +15,7 @@ export default [
   addSticker,
   getPrompt,
   setNewPrompt,
-  clearMessage,
-  showMemories,
-  clearMemories
+  clearMessage
+  // showMemories,
+  // clearMemories
 ]

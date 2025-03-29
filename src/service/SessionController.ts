@@ -10,12 +10,11 @@ export class SessionController {
     this.session = {
       userMessages: [],
       stickersPacks: [defaultStickerPack],
-      // prompt: '',
+      prompt: '',
       firstTime: true,
-      // promptNotSet: false,
-      stickerNotSet: false
-      // replyChance: '1',
-      // memories: []
+      promptNotSet: false,
+      stickerNotSet: false,
+      reflection: ''
     }
     this.env = env
   }
@@ -73,28 +72,5 @@ export class SessionController {
     } catch (e) {
       console.error('resetStickers', e)
     }
-  }
-
-  async addMemory(chatId: string | number, content: string): Promise<void> {
-    // const memory: Memory = {
-    //   content,
-    //   timestamp: new Date().toISOString()
-    // }
-    //
-    // const memories = [memory, ...this.session.memories]
-    //
-    // await this.updateSession(chatId, { memories: memories.slice(0, 50) })
-  }
-
-  getFormattedMemories(): string {
-    return ''
-    // if (!this.session.memories || this.session.memories.length === 0) {
-    //   return ''
-    // }
-    //
-    // return (
-    //   'Important information to remember:' +
-    //   this.session.memories.map((memory) => `- ${memory.content}`).join('')
-    // )
   }
 }

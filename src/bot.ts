@@ -4,8 +4,7 @@ import { message } from 'telegraf/filters'
 import { delay, findByEmoji, getRandomValueArr } from './utils'
 import { BotReply, Context, Sticker } from './types'
 import { SessionController } from './service/SessionController'
-// import { MindController } from './mind'
-// import axios from 'axios'
+
 import commands from './commands'
 import OpenAI from 'openai'
 import { TelegramEmoji } from 'telegraf/types'
@@ -37,6 +36,8 @@ export const createBot = async (env: Context, webhookReply = false) => {
       const isBotMentioned = !!message.match(botName)
       let isBotReplied = false
 
+      const sessionData = await sessionController.getSession(chatId)
+
       const userMessage: OpenAI.Chat.ChatCompletionUserMessageParam = {
         role: 'user',
         content: [
@@ -55,15 +56,60 @@ export const createBot = async (env: Context, webhookReply = false) => {
         name: username
       }
 
-      const sessionData = await sessionController.getSession(chatId)
-
       const allMessages = [
         ...sessionData.userMessages.slice(0, 20),
         userMessage
       ]
 
+      if (sessionData.firstTime) {
+        await sessionController.updateSession(chatId, {
+          firstTime: false
+        })
+        await ctx.telegram.sendMessage(
+          chatId,
+          `Привет, спасибо добавили меня в чат, я всегда отвечаю если вы упоминаете меня в сообщениях, а так же при любых других сообщениях с 5% шансом, для того что бы узнать команды введите /help`
+        )
+        return
+      }
+      if (sessionData.stickerNotSet) {
+        if ('sticker' in ctx.message && ctx.message.sticker?.set_name) {
+          const onlyDefault = sessionController.isOnlyDefaultStickerPack()
+          let newPack = sessionData.stickersPacks
+          if (onlyDefault) {
+            newPack = [ctx.message.sticker.set_name]
+          } else {
+            newPack.push(ctx.message.sticker.set_name)
+          }
+          await sessionController.updateSession(chatId, {
+            stickersPacks: newPack,
+            stickerNotSet: false
+          })
+          await ctx.telegram.sendMessage(chatId, 'Стикер пак был добавлен!')
+          return
+        } else {
+          await sessionController.updateSession(chatId, {
+            stickersPacks: ['gufenpchela'],
+            stickerNotSet: false
+          })
+        }
+      }
+      if (sessionData.promptNotSet) {
+        await sessionController.updateSession(chatId, {
+          prompt: message,
+          promptNotSet: false
+        })
+        return await ctx.telegram.sendMessage(
+          chatId,
+          'Системный промт обновлен!'
+        )
+      }
+
       if (isBotMentioned) {
-        const botReply = await openAi(allMessages)
+        const botReply = await openAi(
+          allMessages,
+          sessionData.prompt,
+          sessionData.reflection
+        )
 
         if (!botReply?.content) return
 
@@ -98,11 +144,12 @@ export const createBot = async (env: Context, webhookReply = false) => {
                   emoji: content as TelegramEmoji
                 }
               ])
+            } else if (type === 'reflection') {
             }
           }
         )
 
-        await Promise.all([
+        await Promise.allSettled([
           ctx.telegram.sendChatAction(chatId, 'typing'),
           delay,
           ...asyncActions
@@ -117,47 +164,6 @@ export const createBot = async (env: Context, webhookReply = false) => {
         lastMessageFromBot: isBotReplied
       })
 
-      if (sessionData.firstTime) {
-        await sessionController.updateSession(chatId, {
-          firstTime: false
-        })
-        await ctx.telegram.sendMessage(
-          chatId,
-          `Привет, спасибо добавили меня в чат, я всегда отвечаю если вы упоминаете меня в сообщениях, а так же при любых других сообщениях с 5% шансом, для того что бы узнать команды введите /help`
-        )
-      }
-      // if (sessionData.promptNotSet) {
-      //   await sessionController.updateSession(chatId, {
-      //     prompt: userMessage,
-      //     promptNotSet: false
-      //   })
-      //   return await ctx.telegram.sendMessage(
-      //     chatId,
-      //     'Системный промт обновлен!'
-      //   )
-      // }
-      // if (sessionData.stickerNotSet) {
-      //   if ('sticker' in ctx.message && ctx.message.sticker?.set_name) {
-      //     const onlyDefault = sessionController.isOnlyDefaultStickerPack()
-      //     let newPack = sessionData.stickersPacks
-      //     if (onlyDefault) {
-      //       newPack = [ctx.message.sticker.set_name]
-      //     } else {
-      //       newPack.push(ctx.message.sticker.set_name)
-      //     }
-      //     await sessionController.updateSession(chatId, {
-      //       stickersPacks: newPack,
-      //       stickerNotSet: false
-      //     })
-      //     await ctx.telegram.sendMessage(chatId, 'Стикер пак был добавлен!')
-      //     return
-      //   } else {
-      //     await sessionController.updateSession(chatId, {
-      //       stickersPacks: ['gufenpchela'],
-      //       stickerNotSet: false
-      //     })
-      //   }
-      // }
       // let image = ''
       // if ('photo' in ctx.message) {
       //   const instance = axios.create({
@@ -179,21 +185,6 @@ export const createBot = async (env: Context, webhookReply = false) => {
       //     console.error('failed download', e)
       //   }
       // }
-      // const currentTime = new Date()
-      // const newMessage: ChatMessage = {
-      //   name: username,
-      //   text: ctx.message?.caption || userMessage,
-      //   time: currentTime.toISOString()
-      // }
-      // const formattedMemories =
-      //   sessionData.memories?.length > 0
-      //     ? sessionController.getFormattedMemories()
-      //     : ''
-      // const recentMessages = [...sessionData.userMessages]
-      //   .map((m) => `${m.name}[${m.time}]: ${m.text};`)
-      //   .join(';')
-      //
-      // // Retrieve the current global mind and format it to be included in the prompt.
       // const botMind = await mindController.getMind()
       //
       // const augmentedPrompt = sessionData.prompt

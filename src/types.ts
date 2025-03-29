@@ -1,22 +1,4 @@
-import { TelegramEmoji } from 'telegraf/types'
 import OpenAI from 'openai'
-
-export interface MemoryResponse {
-  type: 'memory'
-  content: string
-}
-
-export interface MessageContent {
-  message: string
-  chat_id: number
-  message_id: number
-  timestamp: string
-}
-
-export interface Memory {
-  content: string
-  timestamp: string
-}
 
 export interface SessionData {
   userMessages: (
@@ -24,16 +6,14 @@ export interface SessionData {
     | OpenAI.Chat.ChatCompletionMessage
   )[]
   stickersPacks: string[]
-  // prompt: string
+  prompt: string
   firstTime: boolean
-  // promptNotSet: boolean
+  promptNotSet: boolean
   stickerNotSet: boolean
   lastUserMessageTime?: string
   lastBotMessageTime?: string
   lastMessageFromBot?: boolean
   reflection?: string
-  // replyChance: string
-  // memories: Memory[] // Added memories array
 }
 
 export interface Context {
@@ -48,27 +28,8 @@ export interface Sticker {
   file_id: string
 }
 
-export type ResponseType = 'message' | 'emoji' | 'selfChange'
-
-export interface EmojiResponse {
-  type: 'reaction'
-  content: TelegramEmoji
-}
-
-export interface Message {
-  type: ResponseType
-  content: string
-}
-
-export interface MemoryResponse {
-  type: 'memory'
-  content: string
-}
-
-export type MessagesArray = (Message | EmojiResponse | MemoryResponse)[]
-
 export interface BotReply {
-  type: 'message' | 'emoji' | 'reaction' | 'memory'
+  type: 'message' | 'emoji' | 'reaction' | 'reflection'
   content: string
   chat_id: number
   message_id: number
