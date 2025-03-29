@@ -4,6 +4,7 @@ export interface MemoryResponse {
   type: 'memory'
   content: string
 }
+
 export interface ChatMessage {
   name: string
   text: string
@@ -23,7 +24,11 @@ export interface SessionData {
   promptNotSet: boolean
   stickerNotSet: boolean
   replyChance: string
-  memories: Memory[] // Added memories array
+  memories: Memory[]
+  lastUserMessageTime?: string
+  lastBotMessageTime?: string
+  lastMessageFromBot?: boolean
+  reflection?: string
 }
 
 export interface Context {
