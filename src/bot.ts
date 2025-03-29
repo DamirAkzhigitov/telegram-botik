@@ -4,8 +4,8 @@ import { message } from 'telegraf/filters'
 import { delay, findByEmoji, getRandomValueArr } from './utils'
 import { BotReply, Context, Sticker } from './types'
 import { SessionController } from './service/SessionController'
-import { MindController } from './mind'
-import axios from 'axios'
+// import { MindController } from './mind'
+// import axios from 'axios'
 import commands from './commands'
 import OpenAI from 'openai'
 import { TelegramEmoji } from 'telegraf/types'
@@ -18,9 +18,9 @@ export const createBot = async (env: Context, webhookReply = false) => {
   const sessionController = new SessionController(env)
   // const mindController = new MindController(env)
   //
-  // commands.forEach((command) => {
-  //   command(bot, sessionController)
-  // })
+  commands.forEach((command) => {
+    command(bot, sessionController)
+  })
 
   bot.on(message(), async (ctx) => {
     try {
@@ -35,6 +35,7 @@ export const createBot = async (env: Context, webhookReply = false) => {
       const chatId = ctx.chat.id
       const message = ('text' in ctx.message && ctx.message.text) || ''
       const isBotMentioned = !!message.match(botName)
+      let isBotReplied = false
 
       const userMessage: OpenAI.Chat.ChatCompletionUserMessageParam = {
         role: 'user',
@@ -79,6 +80,8 @@ export const createBot = async (env: Context, webhookReply = false) => {
               )
               return ctx.telegram.sendSticker(chat_id, stickerByEmoji.file_id)
             } else if (type === 'message') {
+              isBotReplied = true
+
               return ctx.telegram.sendMessage(chat_id, content, {
                 ...(message_id
                   ? {
@@ -109,20 +112,20 @@ export const createBot = async (env: Context, webhookReply = false) => {
       }
 
       await sessionController.updateSession(chatId, {
-        userMessages: allMessages
+        userMessages: allMessages,
+        lastUserMessageTime: Date.now().toString(),
+        lastMessageFromBot: isBotReplied
       })
 
-      // const shouldReply =
-      //   isReply(sessionData.replyChance) || !!userMessage.match(botName)
-      // if (sessionData.firstTime) {
-      //   await sessionController.updateSession(chatId, {
-      //     firstTime: false
-      //   })
-      //   await ctx.telegram.sendMessage(
-      //     chatId,
-      //     `Привет, спасибо добавили меня в чат, я всегда отвечаю если вы упоминаете меня в сообщениях, а так же при любых других сообщениях с 5% шансом, для того что бы узнать команды введите /help`
-      //   )
-      // }
+      if (sessionData.firstTime) {
+        await sessionController.updateSession(chatId, {
+          firstTime: false
+        })
+        await ctx.telegram.sendMessage(
+          chatId,
+          `Привет, спасибо добавили меня в чат, я всегда отвечаю если вы упоминаете меня в сообщениях, а так же при любых других сообщениях с 5% шансом, для того что бы узнать команды введите /help`
+        )
+      }
       // if (sessionData.promptNotSet) {
       //   await sessionController.updateSession(chatId, {
       //     prompt: userMessage,

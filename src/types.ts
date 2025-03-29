@@ -25,9 +25,13 @@ export interface SessionData {
   )[]
   stickersPacks: string[]
   // prompt: string
-  // firstTime: boolean
+  firstTime: boolean
   // promptNotSet: boolean
   stickerNotSet: boolean
+  lastUserMessageTime?: string
+  lastBotMessageTime?: string
+  lastMessageFromBot?: boolean
+  reflection?: string
   // replyChance: string
   // memories: Memory[] // Added memories array
 }

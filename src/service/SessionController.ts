@@ -11,7 +11,7 @@ export class SessionController {
       userMessages: [],
       stickersPacks: [defaultStickerPack],
       // prompt: '',
-      // firstTime: true,
+      firstTime: true,
       // promptNotSet: false,
       stickerNotSet: false
       // replyChance: '1',

@@ -37,7 +37,10 @@
       "id": "152f559c031a41daa33b0bab2f1a3f24",
       "preview_id": "152f559c031a41daa33b0bab2f1a3f24"
     }
-  ]
+  ],
+  "triggers": {
+    "crons": ["/60 * * * *"]
+  }
   /**
    * Note: Use secrets to store sensitive data.
    * https://developers.cloudflare.com/workers/configuration/secrets/

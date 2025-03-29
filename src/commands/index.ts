@@ -9,7 +9,7 @@ import { showMemories } from './showMemories'
 import { clearMemories } from './clearMemories'
 
 export default [
-  replyChance,
+  // replyChance,
   help,
   resetSticker,
   addSticker,
