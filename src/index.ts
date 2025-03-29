@@ -1,9 +1,17 @@
 import { createBot } from './bot'
 import { Context } from './types'
+import { handleScheduled } from './scheduled'
 
 export default {
   async fetch(request: Request, env: Context): Promise<Response> {
     return handleUpdate(request, env)
+  },
+  async scheduled(
+    event: ScheduledEvent,
+    env: Context,
+    ctx: ExecutionContext
+  ): Promise<void> {
+    await handleScheduled(event.scheduledTime, env)
   }
 }
 
@@ -13,7 +21,6 @@ async function handleUpdate(request: Request, env: Context) {
       const bot = await createBot(env)
       const update = await request.json()
       await bot.handleUpdate(update as any)
-
       return new Response('OK')
     } catch (error) {
       return new Response('Invalid request', { status: 400 })
