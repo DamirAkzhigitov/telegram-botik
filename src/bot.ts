@@ -2,9 +2,8 @@ import { getOpenAIClient } from './gpt'
 import { Telegraf } from 'telegraf'
 import { message } from 'telegraf/filters'
 import { delay, findByEmoji, getRandomValueArr, isReply } from './utils'
-import { ChatMessage, Context, Sticker } from './types'
+import { ChatMessage, Context, Sticker, SessionData } from './types'
 import { SessionController } from './service/SessionController'
-
 import axios from 'axios'
 import commands from './commands'
 
@@ -12,39 +11,32 @@ const botName = '@nairbru007bot'
 
 export const createBot = async (env: Context, webhookReply = false) => {
   const { openAi } = getOpenAIClient(env.API_KEY)
-
   const bot = new Telegraf(env.BOT_KEY, { telegram: { webhookReply } })
   const sessionController = new SessionController(env)
-
   commands.forEach((command) => {
     command(bot, sessionController)
   })
-
   bot.on(message(), async (ctx) => {
     try {
       if (ctx.message.from.is_bot) return
-
       const username =
         ctx.message.from.first_name ||
         ctx.message.from.last_name ||
         ctx.message.from.username ||
         'Anonymous'
       const chatId = ctx.chat.id
-      const userMessage = ('text' in ctx.message && ctx.message.text) || ''
+      const userMessage =
+        ('text' in ctx.message && ctx.message.text) || ''
       const sessionData = await sessionController.getSession(chatId)
       const shouldReply =
         isReply(sessionData.replyChance) || !!userMessage.match(botName)
-
       if (sessionData.firstTime) {
-        await sessionController.updateSession(chatId, {
-          firstTime: false
-        })
+        await sessionController.updateSession(chatId, { firstTime: false })
         await ctx.telegram.sendMessage(
           chatId,
           `Привет, спасибо добавили меня в чат, я всегда отвечаю если вы упоминаете меня в сообщениях, а так же при любых других сообщениях с 5% шансом, для того что бы узнать команды введите /help`
         )
       }
-
       if (sessionData.promptNotSet) {
         await sessionController.updateSession(chatId, {
           prompt: userMessage,
@@ -55,18 +47,15 @@ export const createBot = async (env: Context, webhookReply = false) => {
           'Системный промт обновлен!'
         )
       }
-
       if (sessionData.stickerNotSet) {
         if ('sticker' in ctx.message && ctx.message.sticker?.set_name) {
           const onlyDefault = sessionController.isOnlyDefaultStickerPack()
           let newPack = sessionData.stickersPacks
-
           if (onlyDefault) {
             newPack = [ctx.message.sticker.set_name]
           } else {
             newPack.push(ctx.message.sticker.set_name)
           }
-
           await sessionController.updateSession(chatId, {
             stickersPacks: newPack,
             stickerNotSet: false
@@ -80,7 +69,6 @@ export const createBot = async (env: Context, webhookReply = false) => {
           })
         }
       }
-
       let image = ''
       if ('photo' in ctx.message) {
         const instance = axios.create({
@@ -102,24 +90,19 @@ export const createBot = async (env: Context, webhookReply = false) => {
           console.error('failed download', e)
         }
       }
-
       const currentTime = new Date()
-
       const newMessage: ChatMessage = {
         name: username,
         text: ctx.message?.caption || userMessage,
         time: currentTime.toISOString()
       }
-
       const formattedMemories =
         sessionData.memories?.length > 0
           ? sessionController.getFormattedMemories()
           : ''
-
       const recentMessages = [...sessionData.userMessages]
         .map((m) => `${m.name}[${m.time}]: ${m.text};`)
         .join(';')
-
       const botMessages = await openAi(
         `${newMessage.name}[${newMessage.time}] написал: ${newMessage.text}`,
         recentMessages,
@@ -127,17 +110,13 @@ export const createBot = async (env: Context, webhookReply = false) => {
         image,
         formattedMemories
       )
-
       const memoryItems = botMessages.filter((item) => item.type === 'memory')
-
       for (const memoryItem of memoryItems) {
         await sessionController.addMemory(chatId, memoryItem.content)
       }
-
       const responseMessages = botMessages.filter(
         (item) => item.type !== 'memory'
       )
-
       const botHistory = {
         text: responseMessages
           .filter(({ type }) => type === 'text')
@@ -146,15 +125,25 @@ export const createBot = async (env: Context, webhookReply = false) => {
         time: currentTime.toISOString(),
         name: 'Иван Разумов'
       }
-
-      await sessionController.updateSession(chatId, {
+      
+      const updatedSession: Partial<SessionData> = {
         userMessages: [
           newMessage,
           ...(botHistory.text && shouldReply ? [botHistory] : []),
           ...sessionData.userMessages.slice(0, 20)
-        ]
-      })
-
+        ],
+        lastUserMessageTime: Date.now().toString(),
+        reflection: shouldReply
+          ? ''
+          : ((sessionData.reflection || '') + ' ' + userMessage).trim(),
+        lastMessageFromBot: false
+      }
+      if (shouldReply && botHistory.text) {
+        updatedSession.lastBotMessageTime = Date.now().toString()
+        updatedSession.lastMessageFromBot = true
+      }
+      await sessionController.updateSession(chatId, updatedSession)
+      
       const asyncActions = responseMessages.map(async ({ content, type }) => {
         if (type === 'emoji' && shouldReply) {
           const stickerSet = getRandomValueArr(sessionData.stickersPacks)
@@ -179,7 +168,6 @@ export const createBot = async (env: Context, webhookReply = false) => {
           )
         }
       })
-
       await Promise.all([
         ...(shouldReply ? [ctx.telegram.sendChatAction(chatId, 'typing')] : []),
         delay,
@@ -189,6 +177,5 @@ export const createBot = async (env: Context, webhookReply = false) => {
       console.error('Error processing message:', error)
     }
   })
-
   return bot
 }
