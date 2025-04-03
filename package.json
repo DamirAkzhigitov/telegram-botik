@@ -1,17 +1,15 @@
 {
   "name": "my-first-worker",
-  "version": "0.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "format": "prettier . --write",
-    "dev:local": "tsx --env-file=.env.local ./src/local-test.ts",
     "start": "wrangler dev --test-scheduled",
     "test": "vitest",
     "cf-typegen": "wrangler types",
-    "type-check": "wrangler types --experimental-include-runtime=\"./runtime.d.ts\"",
     "serve": "ngrok http --url=better-suitably-monkey.ngrok-free.app 8787"
   },
   "devDependencies": {

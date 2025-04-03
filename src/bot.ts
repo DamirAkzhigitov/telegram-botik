@@ -8,13 +8,10 @@ import { SessionController } from './service/SessionController'
 import commands from './commands'
 import OpenAI from 'openai'
 import { TelegramEmoji } from 'telegraf/types'
-import * as console from 'node:console'
-import { GoogleSearchService } from './service/GoogleSearch'
 
 const botName = '@nairbru007bot'
 
 export const createBot = async (env: Env, webhookReply = false) => {
-  console.log('env: ', env)
   const { openAi } = getOpenAIClient(env.API_KEY)
   const bot = new Telegraf(env.BOT_KEY, { telegram: { webhookReply } })
   const sessionController = new SessionController(env)
@@ -116,6 +113,7 @@ export const createBot = async (env: Env, webhookReply = false) => {
         if (!botReply?.content) return
 
         const botMessages = JSON.parse(botReply.content)?.items as BotReply[]
+
 
         const asyncActions = botMessages.map(
           async ({ content, type, chat_id, message_id }) => {
