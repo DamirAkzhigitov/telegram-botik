@@ -1,9 +1,8 @@
-import { Context } from './types'
 import { createBot } from './bot'
 
 export async function handleScheduled(
   scheduledTime: number,
-  env: Context
+  env: Env
 ): Promise<void> {
   const now = scheduledTime || Date.now()
   const list = await env.CHAT_SESSIONS_STORAGE.list({ prefix: 'session_' })

@@ -6,8 +6,6 @@
     "target": "es2021",
     /* Specify a set of bundled library declaration files that describe the target runtime environment. */
     "lib": ["es2021"],
-    /* Specify what JSX code is generated. */
-    "jsx": "react-jsx",
 
     /* Specify what module code is generated. */
     "module": "es2022",
@@ -15,7 +13,7 @@
     "moduleResolution": "Bundler",
     /* Specify type package names to be included without being referenced in a source file. */
     "types": [
-      "@cloudflare/workers-types/2023-07-01",
+      "worker-configuration.d.ts",
       "./.wrangler/types/runtime"
     ],
     /* Enable importing .json files */

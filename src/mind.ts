@@ -1,5 +1,3 @@
-import { Context } from './types'
-
 const defaultMind = `
   настроение: хорошее настроение, никто меня не обидел, готов пообщаться,
   думаю: пока ни о чем не думаю, но задумаюсь если надо будет,
@@ -7,9 +5,9 @@ const defaultMind = `
 `
 
 export class MindController {
-  env: Context
+  env: Env
 
-  constructor(env: Context) {
+  constructor(env: Env) {
     this.env = env
   }
 

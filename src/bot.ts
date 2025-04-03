@@ -2,21 +2,23 @@ import { getOpenAIClient } from './gpt'
 import { Telegraf } from 'telegraf'
 import { message } from 'telegraf/filters'
 import { delay, findByEmoji, getRandomValueArr } from './utils'
-import { BotReply, Context, Sticker } from './types'
+import { BotReply, Sticker } from './types'
 import { SessionController } from './service/SessionController'
 
 import commands from './commands'
 import OpenAI from 'openai'
 import { TelegramEmoji } from 'telegraf/types'
+import * as console from 'node:console'
+import { GoogleSearchService } from './service/GoogleSearch'
 
 const botName = '@nairbru007bot'
 
-export const createBot = async (env: Context, webhookReply = false) => {
+export const createBot = async (env: Env, webhookReply = false) => {
+  console.log('env: ', env)
   const { openAi } = getOpenAIClient(env.API_KEY)
   const bot = new Telegraf(env.BOT_KEY, { telegram: { webhookReply } })
   const sessionController = new SessionController(env)
-  // const mindController = new MindController(env)
-  //
+
   commands.forEach((command) => {
     command(bot, sessionController)
   })
@@ -117,6 +119,15 @@ export const createBot = async (env: Context, webhookReply = false) => {
 
         const asyncActions = botMessages.map(
           async ({ content, type, chat_id, message_id }) => {
+            if (type === 'search') {
+              return env.QUEUE.send({
+                type,
+                content,
+                chat_id,
+                message_id,
+                user_message: JSON.stringify(userMessage)
+              })
+            }
             if (type === 'emoji') {
               const stickerSet = getRandomValueArr(sessionData.stickersPacks)
               const response = await ctx.telegram.getStickerSet(stickerSet)
@@ -163,59 +174,6 @@ export const createBot = async (env: Context, webhookReply = false) => {
         lastUserMessageTime: Date.now().toString(),
         lastMessageFromBot: isBotReplied
       })
-
-      // let image = ''
-      // if ('photo' in ctx.message) {
-      //   const instance = axios.create({
-      //     baseURL: 'https://api.telegram.org/',
-      //     timeout: 1000
-      //   })
-      //   const photo = ctx.message.photo
-      //   // Get the highest resolution photo available
-      //   const fileId = photo[photo.length - 1].file_id
-      //   const file = await bot.telegram.getFile(fileId)
-      //   const downloadLink = `file/bot${env.BOT_KEY}/${file.file_path}`
-      //   try {
-      //     const response = await instance.get(downloadLink, {
-      //       responseType: 'arraybuffer'
-      //     })
-      //     const base64Image = Buffer.from(response.data).toString('base64')
-      //     image = `data:image/jpeg;base64,${base64Image}`
-      //   } catch (e) {
-      //     console.error('failed download', e)
-      //   }
-      // }
-      // const botMind = await mindController.getMind()
-      //
-      // const augmentedPrompt = sessionData.prompt
-      //
-
-      // const memoryItems = botMessages.filter((item) => item.type === 'memory')
-      //
-      // for (const memoryItem of memoryItems) {
-      //   await sessionController.addMemory(chatId, memoryItem.content)
-      // }
-      // // Filter out selfChange items so that they don't affect reply content.
-      // const nonSelfChangeMessages = botMessages.filter(
-      //   (item) => item.type !== 'memory'
-      // )
-      // const botHistory = {
-      //   text: nonSelfChangeMessages
-      //     .filter(({ type }) => type === 'text')
-      //     .map(({ content }) => content)
-      //     .join(''),
-      //   time: currentTime.toISOString(),
-      //   name: 'Иван Разумов'
-      // }
-      // await sessionController.updateSession(chatId, {
-      //   userMessages: [
-      //     newMessage,
-      //     ...(botHistory.text && shouldReply ? [botHistory] : []),
-      //     ...sessionData.userMessages.slice(0, 20)
-      //   ]
-      // })
-      //
-      //
     } catch (error) {
       console.error('Error processing message:', error)
     }

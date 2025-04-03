@@ -1,12 +1,12 @@
-import { Context, SessionData } from '../types'
+import { SessionData } from '../types'
 
 const defaultStickerPack = 'gufenpchela'
 
 export class SessionController {
   session: SessionData
-  env: Context
+  env: Env
 
-  constructor(env: Context) {
+  constructor(env: Env) {
     this.session = {
       userMessages: [],
       stickersPacks: [defaultStickerPack],
@@ -48,7 +48,6 @@ export class SessionController {
       ...this.session,
       ...value
     }
-    console.log('newSession: ', JSON.stringify(newSession))
     try {
       this.session = newSession
       await this.env.CHAT_SESSIONS_STORAGE.put(

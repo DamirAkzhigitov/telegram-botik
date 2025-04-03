@@ -16,12 +16,6 @@ export interface SessionData {
   reflection?: string
 }
 
-export interface Context {
-  API_KEY: string
-  BOT_KEY: string
-  CHAT_SESSIONS_STORAGE: KVNamespace
-}
-
 export interface Sticker {
   emoji: string | undefined
   set_name: string
@@ -29,7 +23,7 @@ export interface Sticker {
 }
 
 export interface BotReply {
-  type: 'message' | 'emoji' | 'reaction' | 'reflection'
+  type: 'message' | 'emoji' | 'reaction' | 'reflection' | 'search'
   content: string
   chat_id: number
   message_id: number
