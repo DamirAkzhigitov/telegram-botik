@@ -43,7 +43,6 @@ export const formatting = `
 
 export const getOpenAIClient = (key: string) => {
   const openai = new OpenAI({
-    baseURL: 'https://openrouter.ai/api/v1',
     apiKey: key
   })
 
@@ -58,7 +57,7 @@ export const getOpenAIClient = (key: string) => {
       const memoryContext = memories ? `\nВажная информация: ${memories}` : ''
 
       const options: OpenAI.Chat.ChatCompletionCreateParams = {
-        model: 'google/gemini-2.0-flash-lite-001',
+        model: 'ft:gpt-4o-2024-08-06:personal:damir-chat:BLTZjdrb',
         messages: [
           {
             role: 'user',

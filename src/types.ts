@@ -26,12 +26,6 @@ export interface SessionData {
   memories: Memory[] // Added memories array
 }
 
-export interface Context {
-  API_KEY: string
-  BOT_KEY: string
-  CHAT_SESSIONS_STORAGE: KVNamespace
-}
-
 export interface Sticker {
   emoji: string | undefined
   set_name: string

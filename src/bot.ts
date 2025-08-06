@@ -2,7 +2,7 @@ import { getOpenAIClient } from './gpt'
 import { Telegraf } from 'telegraf'
 import { message } from 'telegraf/filters'
 import { delay, findByEmoji, getRandomValueArr, isReply } from './utils'
-import { ChatMessage, Context, Sticker } from './types'
+import { ChatMessage, Sticker } from './types'
 import { SessionController } from './service/SessionController'
 
 import axios from 'axios'
@@ -10,10 +10,10 @@ import commands from './commands'
 
 const botName = '@nairbru007bot'
 
-export const createBot = async (env: Context, webhookReply = false) => {
+export async function createBot(env: Env, webhookReply = false) {
   const { openAi } = getOpenAIClient(env.API_KEY)
 
-  const bot = new Telegraf(env.BOT_KEY, { telegram: { webhookReply } })
+  const bot = new Telegraf(env.BOT_TOKEN, { telegram: { webhookReply } })
   const sessionController = new SessionController(env)
 
   commands.forEach((command) => {

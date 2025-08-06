@@ -1,13 +1,12 @@
 import { createBot } from './bot'
-import { Context } from './types'
 
 export default {
-  async fetch(request: Request, env: Context): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     return handleUpdate(request, env)
   }
 }
 
-async function handleUpdate(request: Request, env: Context) {
+async function handleUpdate(request: Request, env: Env) {
   if (request.method === 'POST') {
     try {
       const bot = await createBot(env)
