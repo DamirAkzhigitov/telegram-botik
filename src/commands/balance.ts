@@ -1,7 +1,7 @@
 import { Context, Telegraf } from 'telegraf'
 import { UserService } from '../service/UserService'
 
-export function balance(bot: Telegraf<Context<any>>, sessionController: any, userService?: UserService) {
+export function balance(bot: Telegraf<Context<any>>, sessionController: any, userService?: UserService, env?: Env) {
   bot.command('balance', async (ctx) => {
     try {
       if (!ctx.from) {

@@ -19,7 +19,7 @@ export async function createBot(env: Env, webhookReply = false) {
   const userService = new UserService(env.DB)
 
   commands.forEach((command) => {
-    command(bot, sessionController, userService)
+    command(bot, sessionController, userService, env)
   })
 
   bot.on(message(), async (ctx) => {

@@ -2,7 +2,7 @@ import { Context, Telegraf } from 'telegraf'
 
 import { UserService } from '../service/UserService'
 
-export function help(bot: Telegraf<Context<any>>, sessionController: any, userService?: UserService) {
+export function help(bot: Telegraf<Context<any>>, sessionController: any, userService?: UserService, env?: Env) {
   bot.command('help', async (ctx) => {
     try {
       let balanceInfo = ''
