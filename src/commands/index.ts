@@ -8,6 +8,7 @@ import { clearMessage } from './clearMessage'
 import { showMemories } from './showMemories'
 import { clearMemories } from './clearMemories'
 import { balance } from './balance'
+import { image } from './image'
 
 export default [
   replyChance,
@@ -19,5 +20,6 @@ export default [
   clearMessage,
   showMemories,
   clearMemories,
-  balance
+  balance,
+  image
 ]
