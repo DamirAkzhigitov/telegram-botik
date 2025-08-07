@@ -1,6 +1,9 @@
 import { Context, Telegraf } from 'telegraf'
 import { UserService } from '../service/UserService'
 import OpenAI from 'openai'
+import { Readable } from 'stream'
+import * as path from 'node:path'
+import * as fs from 'node:fs'
 
 export function image(
   bot: Telegraf<Context<any>>,
@@ -67,8 +70,8 @@ export function image(
 
       if (moderationResult.flagged) {
         return await ctx.reply(
-          '❌ Ваш запрос содержит неприемлемый контент и не может быть обработан.\n\n' +
-            'Пожалуйста, измените описание изображения и попробуйте снова.'
+          '❌ Ну вот че ты такое хочешь, ты нормальный?.\n\n' +
+            'Попробуй снова.'
         )
       }
 
@@ -92,15 +95,18 @@ export function image(
       await ctx.reply('🎨 Генерирую изображение...')
 
       const response = await openai.images.generate({
-        model: 'dall-e-3',
+        model: 'gpt-image-1',
         prompt,
-        response_format: 'b64_json',
-        size: '1024x1024'
+        output_format: 'jpeg',
+        size: '1024x1024',
+        quality: 'auto'
       })
 
+      console.log('response: ', response)
+
       // Extract image data from response
-      const imageData = response.data[0]
-      
+      const imageData = response.data?.[0]
+
       if (!imageData?.b64_json) {
         // Refund the coin if image generation failed
         await userService.addCoins(ctx.from.id, 1, 'image_generation_refund')
@@ -110,21 +116,81 @@ export function image(
         )
       }
 
+      console.log(imageData.b64_json.slice(0, 100))
+
       // Convert base64 to buffer
       const imageBytes = Buffer.from(imageData.b64_json, 'base64')
 
-      // Step 4: Send the generated image to user
-      await ctx.replyWithPhoto(
-        { source: imageBytes },
+      // Upload to Cloudflare Images
+      const formData = new FormData()
+      formData.append(
+        'file',
+        new File([imageBytes], 'image.png', { type: 'image/png' })
+      )
+
+      if (!env?.IMAGE_TOKEN) {
+        // Refund the coin if image upload failed
+        await userService.addCoins(ctx.from.id, 1, 'image_upload_refund')
+        return await ctx.reply(
+          '❌ Не удалось загрузить изображение: отсутствует токен для Cloudflare Images.\n\n' +
+            'Монета была возвращена на ваш счет. Пожалуйста, обратитесь к администратору.'
+        )
+      }
+
+      const cloudflareResponse = await fetch(
+        'https://api.cloudflare.com/client/v4/accounts/fc0ecda5473dffd9689efebcec8158e3/images/v1',
         {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${env.IMAGE_TOKEN}`
+          },
+          body: formData
+        }
+      )
+
+      if (!cloudflareResponse.ok) {
+        // Refund the coin if image upload failed
+        await userService.addCoins(ctx.from.id, 1, 'image_upload_refund')
+        return await ctx.reply(
+          '❌ Не удалось загрузить изображение в Cloudflare Images.\n\n' +
+            'Монета была возвращена на ваш счет. Пожалуйста, попробуйте позже.'
+        )
+      }
+
+      const cloudflareResult = await cloudflareResponse.json()
+
+      console.log('cloudflareResult: ', cloudflareResult)
+
+      if (
+        !cloudflareResult.success ||
+        !cloudflareResult.result?.variants?.[0]
+      ) {
+        // Refund the coin if image upload failed
+        await userService.addCoins(ctx.from.id, 1, 'image_upload_refund')
+        return await ctx.reply(
+          '❌ Не удалось получить URL изображения из Cloudflare Images.\n\n' +
+            'Монета была возвращена на ваш счет. Пожалуйста, попробуйте позже.'
+        )
+      }
+
+      const imageUrl = cloudflareResult.result.variants[0]
+
+      console.log('imageUrl: ', imageUrl)
+
+      try {
+        await ctx.replyWithPhoto(imageUrl, {
           caption:
             `🖼️ **Изображение сгенерировано!**\n\n` +
             `📝 Запрос: "${prompt}"\n` +
             `💰 Списано: **1 монета**\n` +
             `💳 Оставшийся баланс: **${newBalance} монет**`,
           parse_mode: 'Markdown'
-        }
-      )
+        })
+      } catch (err) {
+        console.error('Ошибка отправки изображения:', err)
+        await ctx.reply('❌ Не удалось отправить изображение.')
+      }
+      // Step 4: Send the generated image to user
     } catch (error) {
       console.error('Error in image command:', error)
 

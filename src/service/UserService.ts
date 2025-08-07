@@ -43,12 +43,11 @@ export class UserService {
     }
 
     // If user doesn't exist, create new user with 5 initial coins
-    const result = await this.db
+    await this.db
       .prepare(
         `
         INSERT INTO users (telegram_id, username, first_name, last_name, coins)
         VALUES (?, ?, ?, ?, 5)
-        RETURNING *
       `
       )
       .bind(
@@ -57,18 +56,33 @@ export class UserService {
         telegramUser.first_name || null,
         telegramUser.last_name || null
       )
-      .first<User>()
+      .run()
 
-    console.log('result: ', result)
+    // Get the newly created user
+    const newUser = await this.getUserByTelegramId(telegramUser.id)
 
-    if (!result) {
+    console.log('newUser: ', newUser)
+
+    if (!newUser) {
       throw new Error('Failed to create user')
     }
 
-    // Log the initial coin transaction
-    await this.logTransaction(result.id, 'registration', 5, 0, 5)
+    // Double-check that the user has 5 coins, if not, fix it
+    if (newUser.coins !== 5) {
+      console.log(`User ${newUser.telegram_id} has ${newUser.coins} coins instead of 5, fixing...`)
+      
+      await this.db
+        .prepare('UPDATE users SET coins = 5, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .bind(newUser.id)
+        .run()
+      
+      newUser.coins = 5
+    }
 
-    return result
+    // Log the initial coin transaction
+    await this.logTransaction(newUser.id, 'registration', 5, 0, 5)
+
+    return newUser
   }
 
   /**
@@ -82,6 +96,7 @@ export class UserService {
       .bind(telegramId)
       .first<User>()
 
+    console.log('getUserByTelegramId result for', telegramId, ':', result)
     return result || null
   }
 
@@ -92,6 +107,7 @@ export class UserService {
    */
   async getUserBalance(telegramId: number): Promise<number> {
     const user = await this.getUserByTelegramId(telegramId)
+    console.log('getUserBalance for telegramId:', telegramId, 'user:', user)
     return user?.coins || 0
   }
 

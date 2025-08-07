@@ -28,12 +28,13 @@ export async function createBot(env: Env, webhookReply = false) {
 
       // Register or get user
       try {
-        await userService.registerOrGetUser({
+        const user = await userService.registerOrGetUser({
           id: ctx.message.from.id,
           username: ctx.message.from.username,
           first_name: ctx.message.from.first_name,
           last_name: ctx.message.from.last_name
         })
+        console.log('User registered/retrieved:', user)
       } catch (error) {
         console.error('Error registering user:', error)
       }
