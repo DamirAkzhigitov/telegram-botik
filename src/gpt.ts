@@ -57,7 +57,7 @@ export const getOpenAIClient = (key: string) => {
       const memoryContext = memories ? `\nВажная информация: ${memories}` : ''
 
       const options: OpenAI.Chat.ChatCompletionCreateParams = {
-        model: 'ft:gpt-4o-2024-08-06:personal:damir-chat:BLTZjdrb',
+        model: 'gpt-5-mini-2025-08-07',
         messages: [
           {
             role: 'user',
@@ -83,9 +83,7 @@ export const getOpenAIClient = (key: string) => {
             content: `Строго следуй следующему: ${customPrompt}, используй форматирование: ${formatting} история сообщений: ${messages},${memoryContext}`
           }
         ],
-        max_tokens: 8000,
-        temperature: 0.5,
-        // presence_penalty: 0.5,
+        max_completion_tokens: 5000,
         response_format: {
           type: 'json_schema',
           json_schema: {

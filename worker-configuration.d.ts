@@ -8,6 +8,7 @@ declare namespace Cloudflare {
 		API_KEY: string;
 		BOT_TOKEN: string;
 		NGROK_AUTH_TOKEN: string;
+		DB: D1Database;
 	}
 }
 interface Env extends Cloudflare.Env {}

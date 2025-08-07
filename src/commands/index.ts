@@ -7,6 +7,7 @@ import { setNewPrompt } from './setNewPrompt'
 import { clearMessage } from './clearMessage'
 import { showMemories } from './showMemories'
 import { clearMemories } from './clearMemories'
+import { balance } from './balance'
 
 export default [
   replyChance,
@@ -17,5 +18,6 @@ export default [
   setNewPrompt,
   clearMessage,
   showMemories,
-  clearMemories
+  clearMemories,
+  balance
 ]

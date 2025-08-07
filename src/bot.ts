@@ -4,6 +4,7 @@ import { message } from 'telegraf/filters'
 import { delay, findByEmoji, getRandomValueArr, isReply } from './utils'
 import { ChatMessage, Sticker } from './types'
 import { SessionController } from './service/SessionController'
+import { UserService } from './service/UserService'
 
 import axios from 'axios'
 import commands from './commands'
@@ -15,14 +16,27 @@ export async function createBot(env: Env, webhookReply = false) {
 
   const bot = new Telegraf(env.BOT_TOKEN, { telegram: { webhookReply } })
   const sessionController = new SessionController(env)
+  const userService = new UserService(env.DB)
 
   commands.forEach((command) => {
-    command(bot, sessionController)
+    command(bot, sessionController, userService)
   })
 
   bot.on(message(), async (ctx) => {
     try {
       if (ctx.message.from.is_bot) return
+
+      // Register or get user
+      try {
+        await userService.registerOrGetUser({
+          id: ctx.message.from.id,
+          username: ctx.message.from.username,
+          first_name: ctx.message.from.first_name,
+          last_name: ctx.message.from.last_name
+        })
+      } catch (error) {
+        console.error('Error registering user:', error)
+      }
 
       const username =
         ctx.message.from.first_name ||
@@ -39,10 +53,10 @@ export async function createBot(env: Env, webhookReply = false) {
         await sessionController.updateSession(chatId, {
           firstTime: false
         })
-        await ctx.telegram.sendMessage(
-          chatId,
-          `Привет, спасибо добавили меня в чат, я всегда отвечаю если вы упоминаете меня в сообщениях, а так же при любых других сообщениях с 5% шансом, для того что бы узнать команды введите /help`
-        )
+        // await ctx.telegram.sendMessage(
+        //   chatId,
+        //   `Привет, спасибо добавили меня в чат, я всегда отвечаю если вы упоминаете меня в сообщениях, а так же при любых других сообщениях с 5% шансом, для того что бы узнать команды введите /help`
+        // )
       }
 
       if (sessionData.promptNotSet) {
@@ -91,7 +105,7 @@ export async function createBot(env: Env, webhookReply = false) {
         // Get the highest resolution photo available
         const fileId = photo[photo.length - 1].file_id
         const file = await bot.telegram.getFile(fileId)
-        const downloadLink = `file/bot${env.BOT_KEY}/${file.file_path}`
+        const downloadLink = `file/bot${env.BOT_TOKEN}/${file.file_path}`
         try {
           const response = await instance.get(downloadLink, {
             responseType: 'arraybuffer'
@@ -107,7 +121,7 @@ export async function createBot(env: Env, webhookReply = false) {
 
       const newMessage: ChatMessage = {
         name: username,
-        text: ctx.message?.caption || userMessage,
+        text: ('caption' in ctx.message && ctx.message.caption) || userMessage,
         time: currentTime.toISOString()
       }
 

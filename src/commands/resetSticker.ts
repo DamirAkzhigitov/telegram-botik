@@ -2,7 +2,8 @@ import { Context, Telegraf } from 'telegraf'
 
 export function resetSticker(
   bot: Telegraf<Context<any>>,
-  sessionController: any
+  sessionController: any,
+  userService?: any
 ) {
   bot.command('reset_sticker_pack', async (ctx) => {
     try {

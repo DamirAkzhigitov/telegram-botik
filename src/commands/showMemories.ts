@@ -3,7 +3,8 @@ import type { SessionController } from '../service/SessionController'
 
 export function showMemories(
   bot: Telegraf<Context<any>>,
-  sessionController: SessionController
+  sessionController: SessionController,
+  userService?: any
 ) {
   bot.command('show_memories', async (ctx) => {
     try {

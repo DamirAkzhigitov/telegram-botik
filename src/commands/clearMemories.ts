@@ -2,7 +2,8 @@ import { Context, Telegraf } from 'telegraf'
 
 export function clearMemories(
   bot: Telegraf<Context<any>>,
-  sessionController: any
+  sessionController: any,
+  userService?: any
 ) {
   bot.command('clear_memories', async (ctx) => {
     try {

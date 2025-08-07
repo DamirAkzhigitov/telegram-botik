@@ -2,7 +2,8 @@ import { Context, Telegraf } from 'telegraf'
 
 export function getPrompt (
   bot: Telegraf<Context<any>>,
-  sessionController: any
+  sessionController: any,
+  userService?: any
 ) {
   bot.command('get_prompt', async (ctx) => {
     try {
