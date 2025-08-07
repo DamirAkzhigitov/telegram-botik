@@ -9,6 +9,7 @@ import { showMemories } from './showMemories'
 import { clearMemories } from './clearMemories'
 import { balance } from './balance'
 import { image } from './image'
+import { buy } from './buy'
 
 export default [
   replyChance,
@@ -21,5 +22,6 @@ export default [
   showMemories,
   clearMemories,
   balance,
-  image
+  image,
+  buy
 ]

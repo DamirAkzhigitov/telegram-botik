@@ -245,4 +245,71 @@ export class UserService {
       .bind(userId, actionType, coinsChange, balanceBefore, balanceAfter)
       .run()
   }
+
+  /**
+   * Create a pending purchase record
+   * @param telegramId Telegram user ID
+   * @param amount Number of coins to purchase
+   * @param paymentId Unique payment identifier
+   * @returns True if successful
+   */
+  async createPendingPurchase(
+    telegramId: number,
+    amount: number,
+    paymentId: string
+  ): Promise<boolean> {
+    const user = await this.getUserByTelegramId(telegramId)
+
+    if (!user) {
+      return false
+    }
+
+    // Store pending purchase in database
+    // You might want to create a separate table for pending purchases
+    // For now, we'll log it as a transaction with pending status
+    await this.db
+      .prepare(
+        `
+        INSERT INTO transactions (user_id, action_type, coins_change, balance_before, balance_after)
+        VALUES (?, ?, ?, ?, ?)
+      `
+      )
+      .bind(user.id, `pending_purchase_${paymentId}`, amount, user.coins, user.coins)
+      .run()
+
+    return true
+  }
+
+  /**
+   * Complete a pending purchase and add coins to user account
+   * @param paymentId Payment identifier
+   * @returns True if successful
+   */
+  async completePurchase(paymentId: string): Promise<boolean> {
+    // Find the pending purchase transaction
+    const pendingTransaction = await this.db
+      .prepare(
+        `
+        SELECT * FROM transactions 
+        WHERE action_type = ? 
+        ORDER BY created_at DESC 
+        LIMIT 1
+      `
+      )
+      .bind(`pending_purchase_${paymentId}`)
+      .first<Transaction>()
+
+    if (!pendingTransaction) {
+      return false
+    }
+
+    // Add coins to user account
+    const success = await this.addCoins(
+      pendingTransaction.user_id,
+      pendingTransaction.coins_change,
+      `purchase_completed_${paymentId}`
+    )
+
+    return success
+  }
 }

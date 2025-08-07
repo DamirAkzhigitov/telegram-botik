@@ -25,6 +25,7 @@ export function help(bot: Telegraf<Context<any>>, sessionController: any, userSe
 /help — Show this help message
 /balance — Check your coin balance
 /image — Generate an image (costs 1 coin)
+/buy <amount> — Purchase coins (min: 5, max: 1000)
 
 **Bot Configuration:**
 /set_new_prompt — Set new bot prompt
@@ -41,6 +42,7 @@ export function help(bot: Telegraf<Context<any>>, sessionController: any, userSe
 **Coin System:**
 • New users get 5 coins upon first interaction
 • Image generation costs 1 coin
+• Purchase more coins with /buy <amount>
 • Check your balance with /balance
 				`,
         { parse_mode: 'Markdown' }
