@@ -151,8 +151,8 @@ export async function createBot(env: Env, webhookReply = false) {
         userMessages: [
           newMessage,
           ...(botHistory.text && shouldReply ? [botHistory] : []),
-          ...sessionData.userMessages.slice(0, 20)
-        ]
+          ...sessionData.userMessages
+        ].slice(-20)
       })
 
       const asyncActions = responseMessages.map(async ({ content, type }) => {
