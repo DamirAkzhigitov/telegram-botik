@@ -1,15 +1,15 @@
 import { Context, Telegraf } from 'telegraf'
+import { SessionService } from '../types'
 
 export function clearMemories(
-  bot: Telegraf<Context<any>>,
-  sessionController: any
+  bot: Telegraf<Context>,
+  sessionService: SessionService
 ) {
   bot.command('clear_memories', async (ctx) => {
     try {
       const chatId = ctx.chat.id
 
-      await sessionController.getSession(ctx.chat.id)
-      await sessionController.updateSession(chatId, {
+      await sessionService.updateSession(chatId, {
         memories: []
       })
 

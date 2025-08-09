@@ -1,13 +1,13 @@
 import { Context, Telegraf } from 'telegraf'
+import { SessionService } from '../types'
 
-export function clearMessage (
-  bot: Telegraf<Context<any>>,
-  sessionController: any
+export function clearMessage(
+  bot: Telegraf<Context>,
+  sessionService: SessionService
 ) {
   bot.command('clear_messages', async (ctx) => {
     try {
-      await sessionController.getSession(ctx.chat.id)
-      await sessionController.updateSession(ctx.chat.id, {
+      await sessionService.updateSession(ctx.chat.id, {
         userMessages: []
       })
       await ctx.telegram.sendMessage(ctx.chat.id, 'История сообщений очищена')

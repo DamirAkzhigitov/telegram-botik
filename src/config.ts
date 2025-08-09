@@ -1,7 +1,11 @@
-import OpenAI from 'openai'
-import { MessagesArray } from './types'
+export const botInfo = {
+  name: 'Иван Разумов',
+  username: '@nairbru007bot'
+}
 
-export const formatting = `
+export const openAIConfig = {
+  model: 'ft:gpt-4o-2024-08-06:personal:damir-chat:BLTZjdrb',
+  promptFormatting: `
 Ты участник чата (тебя зовут Иван Разумов), к тебе могут обратится либо участники могут общаться между собой , ты знаешь историю чата, даты отправки сообщений и имена пользователей, ты можешь видеть картинки, форматы взаимодействия:
 
 Текстовыми сообщениями: объект с type равным "text" и полем content, содержащим текстовый ответ.
@@ -40,103 +44,17 @@ export const formatting = `
 - 💩 Poop emoji
 - 🙏 Praying/Namaste emoji
 `
+}
 
-export const getOpenAIClient = (key: string) => {
-  const openai = new OpenAI({
-    apiKey: key
-  })
+export const defaultStickerPack = 'gufenpchela'
 
-  async function gptApi(
-    userMessage: string,
-    messages: string,
-    customPrompt: string,
-    imageUrl?: string,
-    memories?: string
-  ): Promise<MessagesArray> {
-    try {
-      const memoryContext = memories ? `\nВажная информация: ${memories}` : ''
+export const replyChances = ['0.05', '0.25', '0.50', '0.75', '1']
 
-      const options: OpenAI.Chat.ChatCompletionCreateParams = {
-        model: 'ft:gpt-4o-2024-08-06:personal:damir-chat:BLTZjdrb',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: userMessage
-              },
-              ...((imageUrl
-                ? [
-                    {
-                      type: 'image_url',
-                      image_url: {
-                        url: imageUrl
-                      }
-                    }
-                  ]
-                : []) as any)
-            ]
-          },
-          {
-            role: 'system',
-            content: `Строго следуй следующему: ${customPrompt}, используй форматирование: ${formatting} история сообщений: ${messages},${memoryContext}`
-          }
-        ],
-        max_tokens: 8000,
-        temperature: 0.5,
-        // presence_penalty: 0.5,
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'content_list',
-            strict: true,
-            schema: {
-              type: 'object',
-              properties: {
-                items: {
-                  type: 'array',
-                  description: 'List of content items',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      type: {
-                        type: 'string',
-                        enum: ['text', 'emoji', 'reaction', 'memory'],
-                        description: 'Type of content'
-                      },
-                      content: {
-                        type: 'string',
-                        description: 'Content data'
-                      }
-                    },
-                    required: ['type', 'content'],
-                    additionalProperties: false
-                  }
-                }
-              },
-              required: ['items'],
-              additionalProperties: false
-            }
-          }
-        }
-      }
-
-      const completion = await openai.chat.completions.create(options)
-
-      const response = JSON.parse(
-        completion?.choices?.[0]?.message.content || '[]'
-      )
-
-      if (!response?.items) return []
-
-      return response.items
-    } catch (e) {
-      console.error(e)
-      return []
-    }
-  }
-  return {
-    openAi: gptApi
-  }
+export const messages = {
+  firstTime: `Привет, спасибо добавили меня в чат, я всегда отвечаю если вы упоминаете меня в сообщениях, а так же при любых других сообщениях с 5% шансом, для того что бы узнать команды введите /help`,
+  promptUpdated: 'Системный промт обновлен!',
+  stickerPackAdded: 'Стикер пак был добавлен!',
+  replyChanceSet: (percentage: string) =>
+    `Вы выбрали ${Number(percentage) * 100}%`,
+  memoriesHeader: 'Important information to remember:'
 }

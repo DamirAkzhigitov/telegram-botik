@@ -1,13 +1,10 @@
 import { Context, Telegraf } from 'telegraf'
+import { SessionService } from '../types'
 
-export function addSticker (
-  bot: Telegraf<Context<any>>,
-  sessionController: any
-) {
+export function addSticker(bot: Telegraf<Context>, sessionService: SessionService) {
   bot.command('add_sticker_pack', async (ctx) => {
     try {
-      await sessionController.getSession(ctx.chat.id)
-      await sessionController.updateSession(ctx.chat.id, {
+      await sessionService.updateSession(ctx.chat.id, {
         stickerNotSet: true
       })
       await ctx.telegram.sendMessage(

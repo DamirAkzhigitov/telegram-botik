@@ -49,4 +49,8 @@ export interface MemoryResponse {
   content: string
 }
 
+import { createSessionService } from './services/SessionService'
+
 export type MessagesArray = (Message | EmojiResponse | MemoryResponse)[]
+
+export type SessionService = ReturnType<typeof createSessionService>
