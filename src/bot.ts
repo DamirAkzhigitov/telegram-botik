@@ -1,8 +1,7 @@
 import { Telegraf } from 'telegraf'
 import { createGptService } from './services/GptService'
 import { message } from 'telegraf/filters'
-import { delay, findByEmoji, getRandomValueArr } from './utils'
-import { Sticker } from './types'
+import { delay } from './utils'
 import { createSessionService } from './services/SessionService'
 import { createTelegramService } from './services/TelegramService'
 import {

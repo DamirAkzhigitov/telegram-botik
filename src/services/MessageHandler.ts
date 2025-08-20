@@ -1,4 +1,4 @@
-import { SessionData, ChatMessage, SessionService } from '../types'
+import { ChatMessage, SessionService } from '../types'
 import {
   getFormattedMemories,
   isOnlyDefaultStickerPack
@@ -8,8 +8,7 @@ import { createTelegramService } from './TelegramService'
 import { botInfo, defaultStickerPack, messages as messageConfig } from '../config'
 import { isReply } from '../utils'
 
-// Define the structure of the message context to be passed to the handler
-import { PhotoSize } from 'telegraf/types'
+import { PhotoSize, TelegramEmoji } from 'telegraf/types'
 
 export interface MessageContext {
   chatId: number | string
@@ -32,7 +31,7 @@ export interface MessageContext {
 export type BotAction =
   | { type: 'sendMessage'; text: string }
   | { type: 'sendSticker'; fileId: string }
-  | { type: 'setReaction'; emoji: string }
+  | { type: 'setReaction'; emoji: TelegramEmoji }
   | { type: 'sendChatAction'; action: 'typing' }
 
 export const createMessageHandler = (
@@ -63,7 +62,7 @@ export const createMessageHandler = (
     }
 
     if (sessionData.promptNotSet) {
-      sessionData = await sessionService.updateSession(ctx.chatId, {
+      await sessionService.updateSession(ctx.chatId, {
         prompt: userMessage,
         promptNotSet: false
       })
@@ -80,7 +79,7 @@ export const createMessageHandler = (
         } else {
           newPack.push(ctx.sticker.set_name)
         }
-        sessionData = await sessionService.updateSession(ctx.chatId, {
+        await sessionService.updateSession(ctx.chatId, {
           stickersPacks: newPack,
           stickerNotSet: false
         })

@@ -1,4 +1,4 @@
-import { Sticker } from './types'
+import { Sticker } from 'telegraf/types'
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 5000))
 

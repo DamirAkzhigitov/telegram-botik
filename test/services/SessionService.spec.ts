@@ -1,15 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createSessionService } from '../../src/services/SessionService'
-import { Context, SessionData } from '../../src/types'
+import { SessionData } from '../../src/types'
 
 const mockKvStore = {
   get: vi.fn(),
   put: vi.fn()
 }
 
-const mockEnv = {
-  CHAT_SESSIONS_STORAGE: mockKvStore
-} as unknown as Context
+const mockEnv: any = {
+  CHAT_SESSIONS_STORAGE: mockKvStore,
+  MY_VARIABLE: '',
+  API_KEY: '',
+  BOT_TOKEN: '',
+  NGROK_AUTH_TOKEN: ''
+}
 
 describe('SessionService', () => {
   const sessionService = createSessionService(mockEnv)
@@ -42,7 +46,7 @@ describe('SessionService', () => {
       firstTime: true
     }
     mockKvStore.get.mockResolvedValue(JSON.stringify(existingSession))
-    const newSessionData = { firstTime: false }
+    const newSessionData = { firstTime: false, memories: [] }
     await sessionService.updateSession(chatId, newSessionData)
     expect(mockKvStore.put).toHaveBeenCalledWith(
       `session_${chatId}`,

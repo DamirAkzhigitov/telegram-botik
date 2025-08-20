@@ -1,4 +1,4 @@
-import { Context, Memory, SessionData } from '../types'
+import { Memory, SessionData } from '../types'
 import { defaultStickerPack, messages } from '../config'
 
 const defaultSession: SessionData = {
@@ -31,7 +31,7 @@ export const getFormattedMemories = (session: SessionData): string => {
 }
 
 const getSession = async (
-  env: Context,
+  env: Env,
   chatId: string | number
 ): Promise<SessionData> => {
   try {
@@ -51,7 +51,7 @@ const getSession = async (
 }
 
 const updateSession = async (
-  env: Context,
+  env: Env,
   chatId: string | number,
   value: Partial<SessionData>
 ): Promise<SessionData> => {
@@ -73,14 +73,14 @@ const updateSession = async (
 }
 
 const resetStickers = async (
-  env: Context,
+  env: Env,
   chatId: string | number
 ): Promise<SessionData> => {
   return updateSession(env, chatId, { stickersPacks: [defaultStickerPack] })
 }
 
 const addMemory = async (
-  env: Context,
+  env: Env,
   chatId: string | number,
   content: string
 ): Promise<SessionData> => {
@@ -93,7 +93,7 @@ const addMemory = async (
   return updateSession(env, chatId, { memories })
 }
 
-export const createSessionService = (env: Context) => {
+export const createSessionService = (env: Env) => {
   return {
     getSession: (chatId: string | number) => getSession(env, chatId),
     updateSession: (

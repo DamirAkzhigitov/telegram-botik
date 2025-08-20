@@ -36,7 +36,7 @@ export const createTelegramService = (bot: Telegraf<Context>, botToken: string) 
     try {
       const stickerSet = getRandomValueArr(stickerPacks)
       const response = await bot.telegram.getStickerSet(stickerSet)
-      return findByEmoji(response.stickers as Sticker[], emoji)
+      return findByEmoji(response.stickers, emoji)
     } catch (e) {
       console.error('Failed to get sticker by emoji', e)
       return null

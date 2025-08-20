@@ -27,7 +27,7 @@ export interface SessionData {
 }
 
 export interface Sticker {
-  emoji: string | undefined
+  emoji?: string
   set_name: string
   file_id: string
 }
