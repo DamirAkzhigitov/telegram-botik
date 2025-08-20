@@ -2,7 +2,8 @@ import { Context, Telegraf } from 'telegraf'
 
 export function setNewPrompt (
   bot: Telegraf<Context<any>>,
-  sessionController: any
+  sessionController: any,
+  userService?: any
 ) {
   bot.command('set_new_prompt', async (ctx) => {
     try {

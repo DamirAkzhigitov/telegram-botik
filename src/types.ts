@@ -50,3 +50,25 @@ export interface MemoryResponse {
 }
 
 export type MessagesArray = (Message | EmojiResponse | MemoryResponse)[]
+
+// User and coin system types
+export interface User {
+  id: number;
+  telegram_id: number;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  coins: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Transaction {
+  id: number;
+  user_id: number;
+  action_type: string;
+  coins_change: number;
+  balance_before: number;
+  balance_after: number;
+  created_at: string;
+}

@@ -1,12 +1,12 @@
-import { Context, Memory, SessionData } from '../types'
+import { Memory, SessionData } from '../types'
 
-const defaultStickerPack = 'gufenpchela'
+const defaultStickerPack = 'koshachiy_raskolbas'
 
 export class SessionController {
   session: SessionData
-  env: Context
+  env: Env
 
-  constructor(env: Context) {
+  constructor(env: Env) {
     this.session = {
       userMessages: [],
       stickersPacks: [defaultStickerPack],
@@ -14,7 +14,7 @@ export class SessionController {
       firstTime: true,
       promptNotSet: false,
       stickerNotSet: false,
-      replyChance: '1',
+      replyChance: '0.15',
       memories: []
     }
     this.env = env

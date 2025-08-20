@@ -7,6 +7,10 @@ import { setNewPrompt } from './setNewPrompt'
 import { clearMessage } from './clearMessage'
 import { showMemories } from './showMemories'
 import { clearMemories } from './clearMemories'
+import { balance } from './balance'
+import { image } from './image'
+import { buy } from './buy'
+import { fixBalances } from './fixBalances'
 
 export default [
   replyChance,
@@ -17,5 +21,9 @@ export default [
   setNewPrompt,
   clearMessage,
   showMemories,
-  clearMemories
+  clearMemories,
+  balance,
+  image,
+  buy,
+  fixBalances
 ]

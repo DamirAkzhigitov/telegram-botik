@@ -1,6 +1,6 @@
 import { Markup, Context, Telegraf} from 'telegraf'
 
-export function replyChance(bot: Telegraf<Context<any>>, sessionController: any) {
+export function replyChance(bot: Telegraf<Context<any>>, sessionController: any, userService?: any) {
   const chances = ['0.05', '0.25', '0.50', '0.75', '1']
 
   bot.command('set_reply_chance', async (ctx) => {

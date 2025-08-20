@@ -37,6 +37,13 @@
       "id": "152f559c031a41daa33b0bab2f1a3f24",
       "preview_id": "152f559c031a41daa33b0bab2f1a3f24"
     }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bot-users-db",
+      "database_id": "0258e356-702e-4246-889f-50b82c573ad6"
+    }
   ]
   /**
    * Note: Use secrets to store sensitive data.
