@@ -4,10 +4,7 @@ import { message } from 'telegraf/filters'
 import { delay } from './utils'
 import { createSessionService } from './services/SessionService'
 import { createTelegramService } from './services/TelegramService'
-import {
-  createMessageHandler,
-  MessageContext
-} from './services/MessageHandler'
+import { createMessageHandler, MessageContext } from './services/MessageHandler'
 import commands from './commands'
 
 export async function createBot(env: Env, webhookReply = false) {
@@ -42,16 +39,24 @@ export async function createBot(env: Env, webhookReply = false) {
         message_id: ctx.message.message_id
       }
 
+      console.log('messageContext: ', messageContext)
+
       const actions = await messageHandler.handle(messageContext)
+
+      console.log('actions: ', actions)
 
       // Execute actions
       for (const action of actions) {
         switch (action.type) {
           case 'sendMessage':
-            await ctx.telegram.sendMessage(ctx.chat.id, action.text)
+            await ctx.telegram.sendMessage(ctx.chat.id, action.text, {
+              message_thread_id: 15117
+            })
             break
           case 'sendSticker':
-            await ctx.telegram.sendSticker(ctx.chat.id, action.fileId)
+            await ctx.telegram.sendSticker(ctx.chat.id, action.fileId, {
+              message_thread_id: 15117
+            })
             break
           case 'setReaction':
             await ctx.telegram.setMessageReaction(
@@ -61,7 +66,9 @@ export async function createBot(env: Env, webhookReply = false) {
             )
             break
           case 'sendChatAction':
-            await ctx.telegram.sendChatAction(ctx.chat.id, action.action)
+            await ctx.telegram.sendChatAction(ctx.chat.id, action.action, {
+              message_thread_id: 15117
+            })
             break
         }
       }

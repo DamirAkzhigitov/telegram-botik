@@ -5,7 +5,11 @@ import {
 } from './SessionService'
 import { createGptService } from './GptService'
 import { createTelegramService } from './TelegramService'
-import { botInfo, defaultStickerPack, messages as messageConfig } from '../config'
+import {
+  botInfo,
+  defaultStickerPack,
+  messages as messageConfig
+} from '../config'
 import { isReply } from '../utils'
 
 import { PhotoSize, TelegramEmoji } from 'telegraf/types'
@@ -40,6 +44,7 @@ export const createMessageHandler = (
   telegramService: ReturnType<typeof createTelegramService>
 ) => {
   const handle = async (ctx: MessageContext): Promise<BotAction[]> => {
+    console.log('ctx.from.is_bot: ', ctx.from.is_bot)
     if (ctx.from.is_bot) return []
 
     const username =
@@ -47,11 +52,12 @@ export const createMessageHandler = (
       ctx.from.last_name ||
       ctx.from.username ||
       'Anonymous'
-    const userMessage = ctx.text || ''
+    const userMessage = (ctx.text || '').replace('@nairbru007bot', '')
     let sessionData = await sessionService.getSession(ctx.chatId)
     const shouldReply =
       isReply(sessionData.replyChance) || !!userMessage.match(botInfo.username)
 
+    console.log('shouldReply: ', shouldReply)
     const actions: BotAction[] = []
 
     if (sessionData.firstTime) {
@@ -110,11 +116,13 @@ export const createMessageHandler = (
 
     const formattedMemories = getFormattedMemories(sessionData)
     const recentMessages = [...sessionData.userMessages]
-      .map((m) => `${m.name}[${m.time}]: ${m.text};`)
+      .map((m) => `${m.name}: ${m.text};`)
       .join(';')
 
+    console.log('recentMessages: ', recentMessages)
+
     const botMessages = await gptService.generateResponse(
-      `${newMessage.name}[${newMessage.time}] написал: ${newMessage.text}`,
+      `${newMessage.name} написал: ${newMessage.text}`,
       recentMessages,
       sessionData.prompt,
       image,
@@ -128,6 +136,8 @@ export const createMessageHandler = (
         memoryItem.content
       )
     }
+
+    console.log('memoryItems: ', memoryItems)
 
     const responseMessages = botMessages.filter(
       (item) => item.type !== 'memory'

@@ -14,6 +14,8 @@ export const createGptService = (apiKey: string) => {
     imageUrl?: string,
     memories?: string
   ): Promise<MessagesArray> => {
+    console.log('gptApi: userMessage', userMessage)
+
     try {
       const memoryContext = memories ? `\nВажная информация: ${memories}` : ''
 
@@ -45,8 +47,6 @@ export const createGptService = (apiKey: string) => {
             content: `Строго следуй следующему: ${customPrompt}, используй форматирование: ${openAIConfig.promptFormatting} история сообщений: ${messages},${memoryContext}`
           }
         ],
-        max_tokens: 8000,
-        temperature: 0.5,
         response_format: {
           type: 'json_schema',
           json_schema: {
