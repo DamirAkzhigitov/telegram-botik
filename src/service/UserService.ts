@@ -36,7 +36,7 @@ export class UserService {
     // First, try to get existing user
     const existingUser = await this.getUserByTelegramId(telegramUser.id)
 
-    console.log('existingUser: ', existingUser)
+    // console.log('existingUser: ', existingUser)
 
     if (existingUser) {
       return existingUser
@@ -61,7 +61,7 @@ export class UserService {
     // Get the newly created user
     const newUser = await this.getUserByTelegramId(telegramUser.id)
 
-    console.log('newUser: ', newUser)
+    // console.log('newUser: ', newUser)
 
     if (!newUser) {
       throw new Error('Failed to create user')
@@ -69,13 +69,15 @@ export class UserService {
 
     // Double-check that the user has 5 coins, if not, fix it
     if (newUser.coins !== 5) {
-      console.log(`User ${newUser.telegram_id} has ${newUser.coins} coins instead of 5, fixing...`)
-      
+      // console.log(`User ${newUser.telegram_id} has ${newUser.coins} coins instead of 5, fixing...`)
+
       await this.db
-        .prepare('UPDATE users SET coins = 5, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .prepare(
+          'UPDATE users SET coins = 5, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        )
         .bind(newUser.id)
         .run()
-      
+
       newUser.coins = 5
     }
 
@@ -96,7 +98,7 @@ export class UserService {
       .bind(telegramId)
       .first<User>()
 
-    console.log('getUserByTelegramId result for', telegramId, ':', result)
+    // console.log('getUserByTelegramId result for', telegramId, ':', result)
     return result || null
   }
 
@@ -107,7 +109,7 @@ export class UserService {
    */
   async getUserBalance(telegramId: number): Promise<number> {
     const user = await this.getUserByTelegramId(telegramId)
-    console.log('getUserBalance for telegramId:', telegramId, 'user:', user)
+    // console.log('getUserBalance for telegramId:', telegramId, 'user:', user)
     return user?.coins || 0
   }
 
@@ -290,7 +292,13 @@ export class UserService {
         VALUES (?, ?, ?, ?, ?)
       `
       )
-      .bind(user.id, `pending_purchase_${paymentId}`, amount, user.coins, user.coins)
+      .bind(
+        user.id,
+        `pending_purchase_${paymentId}`,
+        amount,
+        user.coins,
+        user.coins
+      )
       .run()
 
     return true
@@ -306,9 +314,9 @@ export class UserService {
     const pendingTransaction = await this.db
       .prepare(
         `
-        SELECT * FROM transactions 
-        WHERE action_type = ? 
-        ORDER BY created_at DESC 
+        SELECT * FROM transactions
+        WHERE action_type = ?
+        ORDER BY created_at DESC
         LIMIT 1
       `
       )

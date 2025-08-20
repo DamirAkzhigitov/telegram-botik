@@ -24,7 +24,8 @@ export async function createBot(env: Env, webhookReply = false) {
 
   bot.on(message(), async (ctx) => {
     try {
-      if (ctx.message.from.is_bot) return
+      if (ctx.message.from.is_bot || ctx.message.message_thread_id !== 15117)
+        return
 
       // Register or get user
       try {
@@ -34,9 +35,9 @@ export async function createBot(env: Env, webhookReply = false) {
           first_name: ctx.message.from.first_name,
           last_name: ctx.message.from.last_name
         })
-        console.log('User registered/retrieved:', user)
+        // console.log('User registered/retrieved:', user)
       } catch (error) {
-        console.error('Error registering user:', error)
+        // console.error('Error registering user:', error)
       }
 
       const username =
@@ -45,10 +46,12 @@ export async function createBot(env: Env, webhookReply = false) {
         ctx.message.from.username ||
         'Anonymous'
       const chatId = ctx.chat.id
-      const userMessage = ('text' in ctx.message && ctx.message.text) || ''
+      const userMessage = (
+        ('text' in ctx.message && ctx.message.text) ||
+        ''
+      ).replace('@nairbru007bot', '')
       const sessionData = await sessionController.getSession(chatId)
-      const shouldReply =
-        isReply(sessionData.replyChance) || !!userMessage.match(botName)
+      const shouldReply = true
 
       if (sessionData.firstTime) {
         await sessionController.updateSession(chatId, {
@@ -67,7 +70,10 @@ export async function createBot(env: Env, webhookReply = false) {
         })
         return await ctx.telegram.sendMessage(
           chatId,
-          'Системный промт обновлен!'
+          'Системный промт обновлен!',
+          {
+            message_thread_id: 15117
+          }
         )
       }
 
@@ -86,7 +92,9 @@ export async function createBot(env: Env, webhookReply = false) {
             stickersPacks: newPack,
             stickerNotSet: false
           })
-          await ctx.telegram.sendMessage(chatId, 'Стикер пак был добавлен!')
+          await ctx.telegram.sendMessage(chatId, 'Стикер пак был добавлен!', {
+            message_thread_id: 15117
+          })
           return
         } else {
           await sessionController.updateSession(chatId, {
@@ -132,11 +140,11 @@ export async function createBot(env: Env, webhookReply = false) {
           : ''
 
       const recentMessages = [...sessionData.userMessages]
-        .map((m) => `${m.name}[${m.time}]: ${m.text};`)
+        .map((m) => `${m.name}: ${m.text}`)
         .join(';')
 
       const botMessages = await openAi(
-        `${newMessage.name}[${newMessage.time}] написал: ${newMessage.text}`,
+        `${newMessage.name} написал: ${newMessage.text}`,
         recentMessages,
         sessionData.prompt,
         image,
@@ -166,8 +174,8 @@ export async function createBot(env: Env, webhookReply = false) {
         userMessages: [
           newMessage,
           ...(botHistory.text && shouldReply ? [botHistory] : []),
-          ...sessionData.userMessages.slice(0, 20)
-        ]
+          ...sessionData.userMessages
+        ].slice(-20)
       })
 
       const asyncActions = responseMessages.map(async ({ content, type }) => {
@@ -178,9 +186,13 @@ export async function createBot(env: Env, webhookReply = false) {
             response.stickers as Sticker[],
             content
           )
-          return ctx.telegram.sendSticker(ctx.chat.id, stickerByEmoji.file_id)
+          return ctx.telegram.sendSticker(ctx.chat.id, stickerByEmoji.file_id, {
+            message_thread_id: 15117
+          })
         } else if (type === 'text' && shouldReply) {
-          return ctx.telegram.sendMessage(chatId, content)
+          return ctx.telegram.sendMessage(chatId, content, {
+            message_thread_id: 15117
+          })
         } else if (type === 'reaction') {
           return ctx.telegram.setMessageReaction(
             chatId,
