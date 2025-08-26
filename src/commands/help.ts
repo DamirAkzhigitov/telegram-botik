@@ -6,7 +6,7 @@ export function help(bot: Telegraf<Context<any>>, sessionController: any, userSe
   bot.command('help', async (ctx) => {
     try {
       let balanceInfo = ''
-      
+
       if (userService && ctx.from) {
         try {
           const balance = await userService.getUserBalance(ctx.from.id)

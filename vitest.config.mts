@@ -1,11 +1,9 @@
-import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config'
+import { defineConfig } from 'vitest/config'
+import { loadEnv } from 'vite'
 
-export default defineWorkersConfig({
+export default defineConfig(({ mode }) => ({
   test: {
-    poolOptions: {
-      workers: {
-        wrangler: { configPath: './wrangler.jsonc' }
-      }
-    }
+    env: loadEnv(mode, process.cwd(), ''),
+    testTimeout: 30000
   }
-})
+}))

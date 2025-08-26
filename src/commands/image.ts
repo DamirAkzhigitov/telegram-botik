@@ -1,9 +1,6 @@
 import { Context, Telegraf } from 'telegraf'
 import { UserService } from '../service/UserService'
 import OpenAI from 'openai'
-import { Readable } from 'stream'
-import * as path from 'node:path'
-import * as fs from 'node:fs'
 
 export function image(
   bot: Telegraf<Context<any>>,

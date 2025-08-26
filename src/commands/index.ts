@@ -1,4 +1,3 @@
-import { replyChance } from './replyChance'
 import { help } from './help'
 import { resetSticker } from './resetSticker'
 import { addSticker } from './addSticker'
@@ -13,7 +12,6 @@ import { buy } from './buy'
 import { fixBalances } from './fixBalances'
 
 export default [
-  replyChance,
   help,
   resetSticker,
   addSticker,
