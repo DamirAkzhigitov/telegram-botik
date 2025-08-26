@@ -28,7 +28,6 @@ export async function createBot(env: Env, webhookReply = false) {
 
   bot.on(message(), async (ctx) => {
     try {
-      // ctx.message.message_thread_id !== THREAD
       if (ctx.message.from.is_bot) return
 
       try {
@@ -41,6 +40,9 @@ export async function createBot(env: Env, webhookReply = false) {
       } catch (error) {
         console.error('Error registering user:', error)
       }
+
+      // TODO: ONLY FOR TEST PURPOSES
+      const shouldReply = ctx.message.message_thread_id === THREAD
 
       const username =
         ctx.message.from.first_name ||
@@ -138,10 +140,14 @@ export async function createBot(env: Env, webhookReply = false) {
         )
       }
 
+      if (!shouldReply) return
+
       const relativeMessage = await embeddingService.fetchRelevantMessages(
         chatId,
         message
       )
+
+      console.log('relativeMessage: ', JSON.stringify(relativeMessage))
 
       const formattedMemories = sessionController.getFormattedMemories()
 
@@ -197,9 +203,13 @@ export async function createBot(env: Env, webhookReply = false) {
             response.stickers as Sticker[],
             content
           )
-          return ctx.telegram.sendSticker(ctx.chat.id, stickerByEmoji.file_id)
+          return ctx.telegram.sendSticker(ctx.chat.id, stickerByEmoji.file_id, {
+            message_thread_id: THREAD
+          })
         } else if (type === 'text') {
-          return ctx.telegram.sendMessage(chatId, content)
+          return ctx.telegram.sendMessage(chatId, content, {
+            message_thread_id: THREAD
+          })
         } else if (type === 'reaction') {
           return ctx.telegram.setMessageReaction(
             chatId,
@@ -215,7 +225,9 @@ export async function createBot(env: Env, webhookReply = false) {
       })
 
       await Promise.all([
-        ctx.telegram.sendChatAction(chatId, 'typing'),
+        ctx.telegram.sendChatAction(chatId, 'typing', {
+          message_thread_id: THREAD
+        }),
         delay,
         ...asyncActions
       ])

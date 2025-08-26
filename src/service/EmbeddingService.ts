@@ -29,7 +29,7 @@ export class EmbeddingService {
         id: `${chatId}-${Date.now()}`,
         values: embedding,
         metadata: {
-          chatId,
+          chatId: String(chatId),
           role,
           content,
           timestamp: Date.now()
@@ -50,7 +50,7 @@ export class EmbeddingService {
     const results = await index.query({
       vector: embedding,
       topK,
-      filter: { chatId: { $eq: chatId } },
+      filter: { chatId: { $eq: String(chatId) } },
       includeMetadata: true
     })
 
