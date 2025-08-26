@@ -45,8 +45,6 @@ export class SessionController {
     chatId: string | number,
     value: Partial<SessionData>
   ): Promise<void> {
-    console.log('updateSession', chatId, value)
-
     const newSession = {
       ...this.session,
       ...value

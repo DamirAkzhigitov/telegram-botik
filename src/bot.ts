@@ -9,6 +9,7 @@ import OpenAI from 'openai'
 
 import axios from 'axios'
 import commands from './commands'
+import { EmbeddingService } from './service/EmbeddingService'
 
 const botName = '@nairbru007bot'
 const THREAD = 15117
@@ -16,6 +17,7 @@ const THREAD = 15117
 export async function createBot(env: Env, webhookReply = false) {
   const { responseApi, openai } = getOpenAIClient(env.API_KEY)
 
+  const embeddingService = new EmbeddingService(env)
   const bot = new Telegraf(env.BOT_TOKEN, { telegram: { webhookReply } })
   const sessionController = new SessionController(env)
   const userService = new UserService(env.DB)
@@ -116,22 +118,47 @@ export async function createBot(env: Env, webhookReply = false) {
         }
       }
 
-      const currentTime = new Date()
+      const message = `${('caption' in ctx.message && ctx.message.caption) || userMessage}`
 
       const newMessage: OpenAI.Responses.ResponseInputItem.Message = {
         role: 'user',
         content: [
           {
             type: 'input_text',
-            text: `${username}: ${('caption' in ctx.message && ctx.message.caption) || userMessage}`
+            text: `${username}: ${message}`
           }
         ]
       }
+
+      if (message.length > 10) {
+        await embeddingService.saveMessage(
+          chatId,
+          'user',
+          `${username}: ${message}`
+        )
+      }
+
+      const relativeMessage = await embeddingService.fetchRelevantMessages(
+        chatId,
+        message
+      )
 
       const formattedMemories = sessionController.getFormattedMemories()
 
       const botMessages = await responseApi([
         ...formattedMemories,
+        ...relativeMessage.map(
+          (message) =>
+            ({
+              role: 'system',
+              content: [
+                {
+                  type: 'input_text',
+                  text: message?.content
+                }
+              ]
+            }) as unknown as OpenAI.Responses.ResponseOutputMessage
+        ),
         ...sessionData.userMessages,
         newMessage
       ])
@@ -147,15 +174,6 @@ export async function createBot(env: Env, webhookReply = false) {
       const responseMessages = botMessages.filter(
         (item) => item.type !== 'memory'
       )
-
-      const botHistory = {
-        text: responseMessages
-          .filter(({ type }) => type === 'text')
-          .map(({ content }) => content)
-          .join(''),
-        time: currentTime.toISOString(),
-        name: 'Иван Разумов'
-      }
 
       await sessionController.updateSession(chatId, {
         userMessages: [
@@ -179,15 +197,10 @@ export async function createBot(env: Env, webhookReply = false) {
             response.stickers as Sticker[],
             content
           )
-          console.log('sendSticker: ', stickerByEmoji.file_id)
-
           return ctx.telegram.sendSticker(ctx.chat.id, stickerByEmoji.file_id)
         } else if (type === 'text') {
-          console.log('sendMessage: ', content)
-
           return ctx.telegram.sendMessage(chatId, content)
         } else if (type === 'reaction') {
-          console.log('setMessageReaction: ', content)
           return ctx.telegram.setMessageReaction(
             chatId,
             ctx.message.message_id,

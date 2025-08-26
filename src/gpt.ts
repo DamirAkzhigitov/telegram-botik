@@ -47,10 +47,11 @@ export const getOpenAIClient = (key: string) => {
   })
 
   async function responseApi(
-    messages: OpenAI.Responses.ResponseInput
+    messages: (
+      | OpenAI.Responses.ResponseInputItem.Message
+      | OpenAI.Responses.ResponseOutputMessage
+    )[]
   ): Promise<MessagesArray | null> {
-    console.log(JSON.stringify(messages))
-
     try {
       const response = await openai.responses.create({
         model: 'gpt-5-mini-2025-08-07',

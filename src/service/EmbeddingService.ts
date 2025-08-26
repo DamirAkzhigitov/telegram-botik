@@ -18,7 +18,8 @@ export class EmbeddingService {
     const index = this.pc.Index('botik')
     const embeddingResponse = await this.openai.embeddings.create({
       model: 'text-embedding-3-small',
-      input: content
+      input: content,
+      dimensions: 512
     })
 
     const embedding = embeddingResponse.data[0].embedding
@@ -40,7 +41,8 @@ export class EmbeddingService {
     const index = this.pc.Index('botik')
     const embeddingResponse = await this.openai.embeddings.create({
       model: 'text-embedding-3-small',
-      input: query
+      input: query,
+      dimensions: 512
     })
 
     const embedding = embeddingResponse.data[0].embedding

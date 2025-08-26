@@ -99,9 +99,6 @@ export function image(
         quality: 'auto'
       })
 
-      console.log('response: ', response)
-
-      // Extract image data from response
       const imageData = response.data?.[0]
 
       if (!imageData?.b64_json) {
@@ -156,8 +153,6 @@ export function image(
 
       const cloudflareResult = await cloudflareResponse.json()
 
-      console.log('cloudflareResult: ', cloudflareResult)
-
       if (
         !cloudflareResult.success ||
         !cloudflareResult.result?.variants?.[0]
@@ -171,8 +166,6 @@ export function image(
       }
 
       const imageUrl = cloudflareResult.result.variants[0]
-
-      console.log('imageUrl: ', imageUrl)
 
       try {
         await ctx.replyWithPhoto(imageUrl, {
