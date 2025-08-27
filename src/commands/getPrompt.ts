@@ -1,8 +1,9 @@
 import { Context, Telegraf } from 'telegraf'
+import type { SessionController } from '../service/SessionController'
 
-export function getPrompt (
+export function getPrompt(
   bot: Telegraf<Context<any>>,
-  sessionController: any,
+  sessionController: SessionController,
   userService?: any
 ) {
   bot.command('get_prompt', async (ctx) => {

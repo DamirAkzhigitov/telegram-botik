@@ -1,9 +1,10 @@
 import { Context, Telegraf } from 'telegraf'
 import { UserService } from '../service/UserService'
+import type { SessionController } from '../service/SessionController'
 
 export function buy(
   bot: Telegraf<Context<any>>,
-  sessionController: any,
+  sessionController: SessionController,
   userService?: UserService
 ) {
   bot.command('buy', async (ctx) => {

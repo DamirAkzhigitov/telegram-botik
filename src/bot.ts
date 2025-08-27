@@ -136,15 +136,21 @@ export async function createBot(env: Env, webhookReply = false) {
       }
 
       const message = `${('caption' in ctx.message && ctx.message.caption) || userMessage}`
+      const content: OpenAI.Responses.ResponseInputMessageContentList = [
+        {
+          type: 'input_text',
+          text: `${username}: ${message}`
+        }
+      ]
+
+      // if (image) content.push({
+      //   type: 'input_image',
+      //   file_data: image
+      // })
 
       const newMessage: OpenAI.Responses.ResponseInputItem.Message = {
         role: 'user',
-        content: [
-          {
-            type: 'input_text',
-            text: `${username}: ${message}`
-          }
-        ]
+        content: content
       }
 
       console.log({
@@ -219,18 +225,20 @@ export async function createBot(env: Env, webhookReply = false) {
         (item) => item.type !== 'memory'
       )
 
+      const messages = [
+        ...sessionData.userMessages,
+        newMessage,
+        ...botMessages.map(
+          (message) =>
+            ({
+              role: 'assistant',
+              content: [{ type: 'output_text', text: message.content }]
+            }) as OpenAI.Responses.ResponseOutputMessage
+        )
+      ]
+
       await sessionController.updateSession(chatId, {
-        userMessages: [
-          ...sessionData.userMessages,
-          newMessage,
-          ...botMessages.map(
-            (message) =>
-              ({
-                role: 'assistant',
-                content: [{ type: 'output_text', text: message.content }]
-              }) as OpenAI.Responses.ResponseOutputMessage
-          )
-        ]
+        userMessages: messages.splice(-20)
       })
 
       const asyncActions = responseMessages.map(async ({ content, type }) => {
