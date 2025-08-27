@@ -3,6 +3,12 @@ import OpenAI from 'openai'
 
 const defaultStickerPack = 'koshachiy_raskolbas'
 
+const defaultSettings = {
+  thread_id: undefined,
+  reply_only_in_thread: false,
+  send_message_option: {}
+}
+
 export class SessionController {
   session: SessionData
   env: Env
@@ -15,7 +21,8 @@ export class SessionController {
       firstTime: true,
       promptNotSet: false,
       stickerNotSet: false,
-      memories: []
+      memories: [],
+      chat_settings: defaultSettings
     }
     this.env = env
   }

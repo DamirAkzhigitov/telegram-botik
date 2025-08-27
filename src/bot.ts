@@ -12,10 +12,9 @@ import commands from './commands'
 import { EmbeddingService } from './service/EmbeddingService'
 
 const botName = '@nairbru007bot'
-const THREAD = 15117
 
 export async function createBot(env: Env, webhookReply = false) {
-  const { responseApi, openai } = getOpenAIClient(env.API_KEY)
+  const { responseApi } = getOpenAIClient(env.API_KEY)
 
   const embeddingService = new EmbeddingService(env)
   const bot = new Telegraf(env.BOT_TOKEN, { telegram: { webhookReply } })
@@ -40,21 +39,32 @@ export async function createBot(env: Env, webhookReply = false) {
       } catch (error) {
         console.error('Error registering user:', error)
       }
+      const chatId = ctx.chat.id
 
-      // TODO: ONLY FOR TEST PURPOSES
-      const shouldReply = ctx.message.message_thread_id === THREAD
+      const sessionData = await sessionController.getSession(chatId)
+
+      const shouldReply = sessionData.chat_settings.reply_only_in_thread
+        ? ctx.message.message_thread_id === sessionData.chat_settings.thread_id
+        : true
 
       const username =
         ctx.message.from.first_name ||
         ctx.message.from.last_name ||
         ctx.message.from.username ||
         'Anonymous'
-      const chatId = ctx.chat.id
       const userMessage = (
         ('text' in ctx.message && ctx.message.text) ||
         ''
-      ).replace('@nairbru007bot', '')
-      const sessionData = await sessionController.getSession(chatId)
+      ).replace(botName, '')
+
+      console.log({
+        log: 'bot.on(message())',
+        sessionData,
+        chatId,
+        shouldReply,
+        username,
+        userMessage
+      })
 
       if (sessionData.firstTime) {
         await sessionController.updateSession(chatId, {
@@ -69,7 +79,8 @@ export async function createBot(env: Env, webhookReply = false) {
         })
         return await ctx.telegram.sendMessage(
           chatId,
-          'Системный промт обновлен!'
+          'Системный промт обновлен!',
+          sessionData.chat_settings.send_message_option
         )
       }
 
@@ -88,7 +99,11 @@ export async function createBot(env: Env, webhookReply = false) {
             stickersPacks: newPack,
             stickerNotSet: false
           })
-          await ctx.telegram.sendMessage(chatId, 'Стикер пак был добавлен!')
+          await ctx.telegram.sendMessage(
+            chatId,
+            'Стикер пак был добавлен!',
+            sessionData.chat_settings.send_message_option
+          )
           return
         } else {
           await sessionController.updateSession(chatId, {
@@ -132,6 +147,11 @@ export async function createBot(env: Env, webhookReply = false) {
         ]
       }
 
+      console.log({
+        log: 'newMessage',
+        newMessage
+      })
+
       if (message.length > 10) {
         await embeddingService.saveMessage(
           chatId,
@@ -147,9 +167,17 @@ export async function createBot(env: Env, webhookReply = false) {
         message
       )
 
-      console.log('relativeMessage: ', JSON.stringify(relativeMessage))
+      console.log({
+        log: 'relativeMessage',
+        relativeMessage
+      })
 
       const formattedMemories = sessionController.getFormattedMemories()
+
+      console.log({
+        log: 'formattedMemories',
+        formattedMemories
+      })
 
       const botMessages = await responseApi([
         ...formattedMemories,
@@ -169,9 +197,19 @@ export async function createBot(env: Env, webhookReply = false) {
         newMessage
       ])
 
+      console.log({
+        log: 'botMessages',
+        botMessages
+      })
+
       if (!botMessages) return
 
       const memoryItems = botMessages.filter((item) => item.type === 'memory')
+
+      console.log({
+        log: 'memoryItems',
+        memoryItems
+      })
 
       for (const memoryItem of memoryItems) {
         await sessionController.addMemory(chatId, memoryItem.content)
@@ -203,14 +241,39 @@ export async function createBot(env: Env, webhookReply = false) {
             response.stickers as Sticker[],
             content
           )
-          return ctx.telegram.sendSticker(ctx.chat.id, stickerByEmoji.file_id, {
-            message_thread_id: THREAD
+          console.log({
+            log: 'sendSticker',
+            chatId,
+            content: stickerByEmoji.file_id,
+            send_message_option: sessionData.chat_settings.send_message_option
           })
+
+          return ctx.telegram.sendSticker(
+            chatId,
+            stickerByEmoji.file_id,
+            sessionData.chat_settings.send_message_option
+          )
         } else if (type === 'text') {
-          return ctx.telegram.sendMessage(chatId, content, {
-            message_thread_id: THREAD
+          console.log({
+            log: 'sendMessage',
+            chatId,
+            content: content,
+            send_message_option: sessionData.chat_settings.send_message_option
           })
+
+          return ctx.telegram.sendMessage(
+            chatId,
+            content,
+            sessionData.chat_settings.send_message_option
+          )
         } else if (type === 'reaction') {
+          console.log({
+            log: 'setMessageReaction',
+            chatId,
+            content: content,
+            message_id: ctx.message.message_id
+          })
+
           return ctx.telegram.setMessageReaction(
             chatId,
             ctx.message.message_id,
@@ -225,9 +288,11 @@ export async function createBot(env: Env, webhookReply = false) {
       })
 
       await Promise.all([
-        ctx.telegram.sendChatAction(chatId, 'typing', {
-          message_thread_id: THREAD
-        }),
+        ctx.telegram.sendChatAction(
+          chatId,
+          'typing',
+          sessionData.chat_settings.send_message_option
+        ),
         delay,
         ...asyncActions
       ])

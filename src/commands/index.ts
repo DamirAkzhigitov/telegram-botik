@@ -10,6 +10,7 @@ import { balance } from './balance'
 import { image } from './image'
 import { buy } from './buy'
 import { fixBalances } from './fixBalances'
+import { configureChatSettings } from './chatSettings'
 
 export default [
   help,
@@ -23,5 +24,6 @@ export default [
   balance,
   image,
   buy,
-  fixBalances
+  fixBalances,
+  configureChatSettings
 ]

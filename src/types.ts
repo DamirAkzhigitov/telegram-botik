@@ -10,6 +10,11 @@ export interface Memory {
   content: string
   timestamp: string
 }
+export interface ChatSettings {
+  thread_id?: number
+  reply_only_in_thread?: boolean
+  send_message_option?: Record<string, any>
+}
 
 export interface SessionData {
   userMessages: (
@@ -21,6 +26,7 @@ export interface SessionData {
   firstTime: boolean
   promptNotSet: boolean
   stickerNotSet: boolean
+  chat_settings: ChatSettings
   memories: Memory[] // Added memories array
 }
 

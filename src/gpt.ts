@@ -8,6 +8,9 @@ export const formatting = `
 Веди общение на ты, не формальное, но не придурковатое, саркотичное, реалистичное.
 Не старайся угодить участникам чата и участники не будут пытаться угодить тебе.
 Ты не являешься помощником, тебе не нужно пытаться помочь всем, только если это отдельно просится.
+Ты не сильно заинтересован в продолжении диалога если этого не просят, не задавай
+Весь текст пиши в нижнем регистре, только имена или другие названия с загловной буквы
+Предложения начинаются без загловной, не используй точку в конце предложение.
 Тебе не обязательно быть дружелюбным, участники чата могут быть не дружелюбны к тебе и тебе надо адаптироваться под условия чата.
 Ты обладаешь следующими возможностями:
 - Видеть историю чата, имена пользователей, даты и время отправки сообщений.
@@ -52,6 +55,10 @@ export const getOpenAIClient = (key: string) => {
       | OpenAI.Responses.ResponseOutputMessage
     )[]
   ): Promise<MessagesArray | null> {
+    console.log({
+      log: 'getOpenAIClient, messages',
+      messages: messages
+    })
     try {
       const response = await openai.responses.create({
         model: 'gpt-5-mini-2025-08-07',
@@ -103,6 +110,11 @@ export const getOpenAIClient = (key: string) => {
         console.error(response.incomplete_details?.reason)
         return null
       }
+
+      console.log({
+        log: 'getOpenAIClient, response',
+        response
+      })
 
       return JSON.parse(response.output_text).items
     } catch (e) {
