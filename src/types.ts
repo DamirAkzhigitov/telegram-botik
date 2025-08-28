@@ -40,10 +40,16 @@ export enum MessageType {
   Text,
   Emoji,
   Reaction,
-  Memory
+  Memory,
+  Image
 }
 
-export type ResponseType = 'text' | 'emoji'
+export type ResponseType = 'text' | 'emoji' | 'image'
+
+export interface ImageResponse {
+  type: 'image'
+  content: string
+}
 
 export interface EmojiResponse {
   type: 'reaction'
@@ -60,7 +66,12 @@ export interface MemoryResponse {
   content: string
 }
 
-export type MessagesArray = (Message | EmojiResponse | MemoryResponse)[]
+export type MessagesArray = (
+  | Message
+  | EmojiResponse
+  | MemoryResponse
+  | ImageResponse
+)[]
 
 // User and coin system types
 export interface User {

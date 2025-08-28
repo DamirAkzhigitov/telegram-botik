@@ -1,7 +1,7 @@
 import { getOpenAIClient } from './gpt'
 import { Telegraf } from 'telegraf'
 import { message } from 'telegraf/filters'
-import { delay, findByEmoji, getRandomValueArr, isReply } from './utils'
+import { base64ToBlob, delay, findByEmoji, getRandomValueArr } from './utils'
 import { Sticker } from './types'
 import { SessionController } from './service/SessionController'
 import { UserService } from './service/UserService'
@@ -185,23 +185,30 @@ export async function createBot(env: Env, webhookReply = false) {
         formattedMemories
       })
 
-      const botMessages = await responseApi([
-        ...formattedMemories,
-        ...relativeMessage.map(
-          (message) =>
-            ({
-              role: 'system',
-              content: [
-                {
-                  type: 'input_text',
-                  text: message?.content
-                }
-              ]
-            }) as unknown as OpenAI.Responses.ResponseOutputMessage
-        ),
-        ...sessionData.userMessages,
-        newMessage
-      ])
+      const hasEnoughCoins = await userService.hasEnoughCoins(ctx.from.id, 1)
+
+      const botMessages = await responseApi(
+        [
+          ...formattedMemories,
+          ...relativeMessage.map(
+            (message) =>
+              ({
+                role: 'system',
+                content: [
+                  {
+                    type: 'input_text',
+                    text: message?.content
+                  }
+                ]
+              }) as unknown as OpenAI.Responses.ResponseOutputMessage
+          ),
+          ...sessionData.userMessages,
+          newMessage
+        ],
+        {
+          hasEnoughCoins
+        }
+      )
 
       console.log({
         log: 'botMessages',
@@ -232,7 +239,12 @@ export async function createBot(env: Env, webhookReply = false) {
           (message) =>
             ({
               role: 'assistant',
-              content: [{ type: 'output_text', text: message.content }]
+              content: [
+                {
+                  type: 'output_text',
+                  text: message.type === 'image' ? 'image' : message.content
+                }
+              ]
             }) as OpenAI.Responses.ResponseOutputMessage
         )
       ]
@@ -291,6 +303,30 @@ export async function createBot(env: Env, webhookReply = false) {
                 emoji: content
               }
             ]
+          )
+        } else if (type === 'image') {
+          await userService.deductCoins(ctx.from.id, 1, 'image_generation')
+          const form = new FormData()
+
+          const blob = base64ToBlob(content, 'image/jpeg')
+          const file = new File([blob], 'image.jpg', { type: 'image/jpeg' })
+
+          form.append('chat_id', String(chatId))
+          form.append('photo', file)
+
+          if (sessionData.chat_settings.thread_id) {
+            form.append(
+              'message_thread_id',
+              String(sessionData.chat_settings.thread_id)
+            )
+          }
+
+          const res = await fetch(
+            `https://api.telegram.org/bot${env.BOT_TOKEN}/sendPhoto`,
+            {
+              method: 'POST',
+              body: form
+            }
           )
         }
       })

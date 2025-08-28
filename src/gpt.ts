@@ -53,12 +53,26 @@ export const getOpenAIClient = (key: string) => {
     messages: (
       | OpenAI.Responses.ResponseInputItem.Message
       | OpenAI.Responses.ResponseOutputMessage
-    )[]
+    )[],
+    options?: {
+      hasEnoughCoins: boolean
+    }
   ): Promise<MessagesArray | null> {
+    const { hasEnoughCoins = false } = options || {}
     console.log({
       log: 'getOpenAIClient, messages',
       messages: messages
     })
+    const tools: OpenAI.Responses.Tool[] = []
+
+    if (hasEnoughCoins) {
+      tools.push({
+        type: 'image_generation',
+        size: '1024x1024',
+        quality: 'low',
+        input_fidelity: 'low'
+      })
+    }
     try {
       const response = await openai.responses.create({
         model: 'gpt-5-mini-2025-08-07',
@@ -70,6 +84,7 @@ export const getOpenAIClient = (key: string) => {
           ...messages
         ],
         store: true,
+        tools,
         text: {
           format: {
             type: 'json_schema',
@@ -110,13 +125,32 @@ export const getOpenAIClient = (key: string) => {
         console.error(response.incomplete_details?.reason)
         return null
       }
+      const items: MessagesArray = []
+      const message = response.output.find((item) => item.type === 'message')
+      const image_generation = response.output.find(
+        (item) => item.type === 'image_generation_call'
+      )
+      if (message) {
+        const output_text = message.content.find(
+          (item) => item.type === 'output_text'
+        )
+        if (output_text?.text) items.push(...JSON.parse(output_text.text).items)
+      }
+
+      if (image_generation && image_generation.result) {
+        items.push({
+          type: 'image',
+          content: image_generation.result
+        })
+      }
 
       console.log({
         log: 'getOpenAIClient, response',
-        response
+        response,
+        output: JSON.stringify(response.output, null, 2)
       })
 
-      return JSON.parse(response.output_text).items
+      return items
     } catch (e) {
       console.error(e)
       return null

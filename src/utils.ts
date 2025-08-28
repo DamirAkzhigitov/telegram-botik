@@ -15,4 +15,11 @@ const findByEmoji = (stickers: Sticker[], emoji: string): Sticker => {
 
 const isReply = (chance: string) => Math.random() < Number(chance)
 
-export { delay, isReply, getRandomValueArr, findByEmoji }
+function base64ToBlob(b64: string, type: string) {
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return new Blob([bytes], { type })
+}
+
+export { delay, isReply, getRandomValueArr, findByEmoji, base64ToBlob }
