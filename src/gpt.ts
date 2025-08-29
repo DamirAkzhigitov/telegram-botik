@@ -68,9 +68,7 @@ export const getOpenAIClient = (key: string) => {
     if (hasEnoughCoins) {
       tools.push({
         type: 'image_generation',
-        size: '1024x1024',
-        quality: 'low',
-        input_fidelity: 'low'
+        size: '1024x1024'
       })
     }
     try {
