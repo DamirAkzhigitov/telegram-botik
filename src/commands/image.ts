@@ -1,9 +1,6 @@
 import { Context, Telegraf } from 'telegraf'
 import { UserService } from '../service/UserService'
 import OpenAI from 'openai'
-import { Readable } from 'stream'
-import * as path from 'node:path'
-import * as fs from 'node:fs'
 
 export function image(
   bot: Telegraf<Context<any>>,
@@ -102,9 +99,6 @@ export function image(
         quality: 'auto'
       })
 
-      console.log('response: ', response)
-
-      // Extract image data from response
       const imageData = response.data?.[0]
 
       if (!imageData?.b64_json) {
@@ -137,45 +131,30 @@ export function image(
         )
       }
 
-      const cloudflareResponse = await fetch(
-        'https://api.cloudflare.com/client/v4/accounts/fc0ecda5473dffd9689efebcec8158e3/images/v1',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${env.IMAGE_TOKEN}`
-          },
-          body: formData
-        }
-      )
+      // if (!cloudflareResponse.ok) {
+      //   // Refund the coin if image upload failed
+      //   await userService.addCoins(ctx.from.id, 1, 'image_upload_refund')
+      //   return await ctx.reply(
+      //     '❌ Не удалось загрузить изображение в Cloudflare Images.\n\n' +
+      //       'Монета была возвращена на ваш счет. Пожалуйста, попробуйте позже.'
+      //   )
+      // }
 
-      if (!cloudflareResponse.ok) {
-        // Refund the coin if image upload failed
-        await userService.addCoins(ctx.from.id, 1, 'image_upload_refund')
-        return await ctx.reply(
-          '❌ Не удалось загрузить изображение в Cloudflare Images.\n\n' +
-            'Монета была возвращена на ваш счет. Пожалуйста, попробуйте позже.'
-        )
-      }
+      // const cloudflareResult = await cloudflareResponse.json()
 
-      const cloudflareResult = await cloudflareResponse.json()
+      // if (
+      //   !cloudflareResult.success ||
+      //   !cloudflareResult.result?.variants?.[0]
+      // ) {
+      //   // Refund the coin if image upload failed
+      //   await userService.addCoins(ctx.from.id, 1, 'image_upload_refund')
+      //   return await ctx.reply(
+      //     '❌ Не удалось получить URL изображения из Cloudflare Images.\n\n' +
+      //       'Монета была возвращена на ваш счет. Пожалуйста, попробуйте позже.'
+      //   )
+      // }
 
-      console.log('cloudflareResult: ', cloudflareResult)
-
-      if (
-        !cloudflareResult.success ||
-        !cloudflareResult.result?.variants?.[0]
-      ) {
-        // Refund the coin if image upload failed
-        await userService.addCoins(ctx.from.id, 1, 'image_upload_refund')
-        return await ctx.reply(
-          '❌ Не удалось получить URL изображения из Cloudflare Images.\n\n' +
-            'Монета была возвращена на ваш счет. Пожалуйста, попробуйте позже.'
-        )
-      }
-
-      const imageUrl = cloudflareResult.result.variants[0]
-
-      console.log('imageUrl: ', imageUrl)
+      // const imageUrl = cloudflareResult.result.variants[0]
 
       try {
         await ctx.replyWithPhoto(imageUrl, {

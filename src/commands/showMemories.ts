@@ -14,7 +14,8 @@ export function showMemories(
       if (!sessionData.memories || sessionData.memories.length === 0) {
         await ctx.telegram.sendMessage(
           chatId,
-          'У меня пока нет сохраненных воспоминаний об этом чате.'
+          'У меня пока нет сохраненных воспоминаний об этом чате.',
+          sessionData.chat_settings.send_message_option
         )
         return
       }
@@ -23,7 +24,11 @@ export function showMemories(
         .map((memory, index) => `${index + 1}. ${memory.content}`)
         .join('')
 
-      await ctx.telegram.sendMessage(chatId, `Вот что я запомнил:${memories}`)
+      await ctx.telegram.sendMessage(
+        chatId,
+        `Вот что я запомнил:${memories}`,
+        sessionData.chat_settings.send_message_option
+      )
     } catch (error) {
       console.error('Error showing memories:', error)
     }

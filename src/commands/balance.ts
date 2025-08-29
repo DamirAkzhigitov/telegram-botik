@@ -1,7 +1,13 @@
 import { Context, Telegraf } from 'telegraf'
 import { UserService } from '../service/UserService'
+import type { SessionController } from '../service/SessionController'
 
-export function balance(bot: Telegraf<Context<any>>, sessionController: any, userService?: UserService, env?: Env) {
+export function balance(
+  bot: Telegraf<Context<any>>,
+  sessionController: SessionController,
+  userService?: UserService,
+  env?: Env
+) {
   bot.command('balance', async (ctx) => {
     try {
       if (!ctx.from) {
@@ -13,10 +19,10 @@ export function balance(bot: Telegraf<Context<any>>, sessionController: any, use
       }
 
       const balance = await userService.getUserBalance(ctx.from.id)
-      
+
       await ctx.reply(
         `💰 Your current balance: **${balance} coins**\n\n` +
-        `Use /help to see available commands and their costs.`,
+          `Use /help to see available commands and their costs.`,
         { parse_mode: 'Markdown' }
       )
     } catch (error) {
@@ -24,4 +30,4 @@ export function balance(bot: Telegraf<Context<any>>, sessionController: any, use
       await ctx.reply('❌ Error retrieving balance. Please try again later.')
     }
   })
-} 
+}

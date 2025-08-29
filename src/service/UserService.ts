@@ -327,13 +327,10 @@ export class UserService {
       return false
     }
 
-    // Add coins to user account
-    const success = await this.addCoins(
+    return await this.addCoins(
       pendingTransaction.user_id,
       pendingTransaction.coins_change,
       `purchase_completed_${paymentId}`
     )
-
-    return success
   }
 }

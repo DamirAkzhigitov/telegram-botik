@@ -1,6 +1,13 @@
 import { Memory, SessionData } from '../types'
+import OpenAI from 'openai'
 
 const defaultStickerPack = 'koshachiy_raskolbas'
+
+const defaultSettings = {
+  thread_id: undefined,
+  reply_only_in_thread: false,
+  send_message_option: {}
+}
 
 export class SessionController {
   session: SessionData
@@ -14,8 +21,8 @@ export class SessionController {
       firstTime: true,
       promptNotSet: false,
       stickerNotSet: false,
-      replyChance: '0.15',
-      memories: []
+      memories: [],
+      chat_settings: defaultSettings
     }
     this.env = env
   }
@@ -80,19 +87,24 @@ export class SessionController {
       timestamp: new Date().toISOString()
     }
 
-    const memories = [memory, ...this.session.memories]
+    const memories = [...this.session.memories, memory]
 
-    await this.updateSession(chatId, { memories: memories.slice(0, 50) })
+    await this.updateSession(chatId, { memories: memories.slice(-50) })
   }
 
-  getFormattedMemories(): string {
+  getFormattedMemories(): OpenAI.Responses.ResponseInputItem.Message[] {
     if (!this.session.memories || this.session.memories.length === 0) {
-      return ''
+      return []
     }
 
-    return (
-      'Important information to remember:' +
-      this.session.memories.map((memory) => `- ${memory.content}`).join('')
-    )
+    return this.session.memories.map((memory) => ({
+      role: 'system',
+      content: [
+        {
+          type: 'input_text',
+          text: memory.content
+        }
+      ]
+    }))
   }
 }
