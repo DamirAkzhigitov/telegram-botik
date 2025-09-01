@@ -26,6 +26,8 @@ export interface SessionData {
   firstTime: boolean
   promptNotSet: boolean
   stickerNotSet: boolean
+  toggle_history: boolean
+  model?: string | undefined | 'not_set'
   chat_settings: ChatSettings
   memories: Memory[] // Added memories array
 }

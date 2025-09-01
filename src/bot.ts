@@ -2,7 +2,7 @@ import { getOpenAIClient } from './gpt'
 import { Telegraf } from 'telegraf'
 import { message } from 'telegraf/filters'
 import { base64ToBlob, delay, findByEmoji, getRandomValueArr } from './utils'
-import { Sticker } from './types'
+import { Sticker, Message } from './types'
 import { SessionController } from './service/SessionController'
 import { UserService } from './service/UserService'
 import OpenAI from 'openai'
@@ -10,6 +10,7 @@ import OpenAI from 'openai'
 import axios from 'axios'
 import commands from './commands'
 import { EmbeddingService } from './service/EmbeddingService'
+import { RecordMetadata } from '@pinecone-database/pinecone'
 
 const botName = '@nairbru007bot'
 
@@ -65,6 +66,18 @@ export async function createBot(env: Env, webhookReply = false) {
         username,
         userMessage
       })
+
+      if (sessionData?.model === 'not_set') {
+        await sessionController.updateSession(chatId, {
+          model: userMessage
+        })
+
+        return await ctx.telegram.sendMessage(
+          chatId,
+          'Модель обновлена',
+          sessionData.chat_settings.send_message_option
+        )
+      }
 
       if (sessionData.firstTime) {
         await sessionController.updateSession(chatId, {
@@ -158,7 +171,7 @@ export async function createBot(env: Env, webhookReply = false) {
         newMessage
       })
 
-      if (message.length > 10) {
+      if (message.length > 10 && sessionData.toggle_history) {
         await embeddingService.saveMessage(
           chatId,
           'user',
@@ -168,17 +181,25 @@ export async function createBot(env: Env, webhookReply = false) {
 
       if (!shouldReply) return
 
-      const relativeMessage = await embeddingService.fetchRelevantMessages(
-        chatId,
-        message
-      )
+      let relativeMessage: (RecordMetadata | undefined)[] = []
+
+      if (sessionData.toggle_history) {
+        relativeMessage = await embeddingService.fetchRelevantMessages(
+          chatId,
+          message
+        )
+      }
 
       console.log({
         log: 'relativeMessage',
         relativeMessage
       })
 
-      const formattedMemories = sessionController.getFormattedMemories()
+      let formattedMemories: OpenAI.Responses.ResponseInputItem.Message[] = []
+
+      if (sessionData.toggle_history) {
+        formattedMemories = sessionController.getFormattedMemories()
+      }
 
       console.log({
         log: 'formattedMemories',
@@ -206,7 +227,9 @@ export async function createBot(env: Env, webhookReply = false) {
           newMessage
         ],
         {
-          hasEnoughCoins
+          hasEnoughCoins,
+          model: sessionData.model,
+          prompt: sessionData.prompt
         }
       )
 
@@ -224,8 +247,10 @@ export async function createBot(env: Env, webhookReply = false) {
         memoryItems
       })
 
-      for (const memoryItem of memoryItems) {
-        await sessionController.addMemory(chatId, memoryItem.content)
+      if (sessionData.toggle_history) {
+        for (const memoryItem of memoryItems) {
+          await sessionController.addMemory(chatId, memoryItem.content)
+        }
       }
 
       const responseMessages = botMessages.filter(
@@ -249,9 +274,11 @@ export async function createBot(env: Env, webhookReply = false) {
         )
       ]
 
-      await sessionController.updateSession(chatId, {
-        userMessages: messages.splice(-20)
-      })
+      if (sessionData.toggle_history) {
+        await sessionController.updateSession(chatId, {
+          userMessages: messages.splice(-20)
+        })
+      }
 
       const asyncActions = responseMessages.map(async ({ content, type }) => {
         if (type === 'emoji') {
@@ -281,11 +308,10 @@ export async function createBot(env: Env, webhookReply = false) {
             send_message_option: sessionData.chat_settings.send_message_option
           })
 
-          return ctx.telegram.sendMessage(
-            chatId,
-            content,
-            sessionData.chat_settings.send_message_option
-          )
+          return ctx.telegram.sendMessage(chatId, content, {
+            ...sessionData.chat_settings.send_message_option,
+            parse_mode: 'Markdown'
+          })
         } else if (type === 'reaction') {
           console.log({
             log: 'setMessageReaction',
@@ -321,7 +347,7 @@ export async function createBot(env: Env, webhookReply = false) {
             )
           }
 
-          const res = await fetch(
+          await fetch(
             `https://api.telegram.org/bot${env.BOT_TOKEN}/sendPhoto`,
             {
               method: 'POST',

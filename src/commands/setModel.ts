@@ -1,15 +1,16 @@
 import { Context, Telegraf } from 'telegraf'
+import type { SessionController } from '../service/SessionController'
 
-export function setNewPrompt(
+export function setModel(
   bot: Telegraf<Context<any>>,
-  sessionController: any,
+  sessionController: SessionController,
   userService?: any
 ) {
-  bot.command('set_new_prompt', async (ctx) => {
+  bot.command('set_model', async (ctx) => {
     try {
       const session = await sessionController.getSession(ctx.chat.id)
       await sessionController.updateSession(ctx.chat.id, {
-        promptNotSet: true
+        model: 'not_set'
       })
       await ctx.telegram.sendMessage(
         ctx.chat.id,

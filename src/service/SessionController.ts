@@ -21,6 +21,8 @@ export class SessionController {
       firstTime: true,
       promptNotSet: false,
       stickerNotSet: false,
+      model: undefined,
+      toggle_history: true,
       memories: [],
       chat_settings: defaultSettings
     }

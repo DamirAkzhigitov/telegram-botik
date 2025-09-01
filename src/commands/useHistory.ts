@@ -1,19 +1,21 @@
 import { Context, Telegraf } from 'telegraf'
+import type { SessionController } from '../service/SessionController'
 
-export function setNewPrompt(
+export function useHistory(
   bot: Telegraf<Context<any>>,
-  sessionController: any,
+  sessionController: SessionController,
   userService?: any
 ) {
-  bot.command('set_new_prompt', async (ctx) => {
+  bot.command('toggle_history', async (ctx) => {
     try {
       const session = await sessionController.getSession(ctx.chat.id)
+      const val = 'toggle_history' in session ? !session.toggle_history : true
       await sessionController.updateSession(ctx.chat.id, {
-        promptNotSet: true
+        toggle_history: val
       })
       await ctx.telegram.sendMessage(
         ctx.chat.id,
-        'В следующем сообщении отправьте системный промпт',
+        `Параметр toggle_history установлен: ${val}`,
         session.chat_settings.send_message_option
       )
     } catch (error) {
