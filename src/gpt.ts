@@ -65,10 +65,10 @@ export const getOpenAIClient = (key: string) => {
     const tools: OpenAI.Responses.Tool[] = []
 
     if (hasEnoughCoins) {
-      tools.push({
-        type: 'image_generation',
-        size: '1024x1024'
-      })
+      // tools.push({
+      //   type: 'image_generation',
+      //   size: '1024x1024'
+      // })
     }
     if (prompt) {
       input.push({
