@@ -1,5 +1,6 @@
 import { Context, Telegraf } from 'telegraf'
 import type { SessionController } from '../service/SessionController'
+import { ALLOWED_TEXT_MODELS, DEFAULT_TEXT_MODEL } from '../constants/models'
 
 export function setModel(
   bot: Telegraf<Context<any>>,
@@ -14,7 +15,7 @@ export function setModel(
       })
       await ctx.telegram.sendMessage(
         ctx.chat.id,
-        'В следующем сообщении отправьте системный промпт',
+        `Отправьте в следующем сообщении одну из моделей: ${ALLOWED_TEXT_MODELS.join(', ')}.\nЕсли выбрать не получится, установим ${DEFAULT_TEXT_MODEL}.`,
         session.chat_settings.send_message_option
       )
     } catch (error) {

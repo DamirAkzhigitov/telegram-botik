@@ -1,5 +1,6 @@
 import { Memory, SessionData } from '../types'
 import OpenAI from 'openai'
+import { DEFAULT_TEXT_MODEL, resolveModelChoice } from '../constants/models'
 
 const defaultStickerPack = 'koshachiy_raskolbas'
 
@@ -21,7 +22,7 @@ export class SessionController {
       firstTime: true,
       promptNotSet: false,
       stickerNotSet: false,
-      model: undefined,
+      model: DEFAULT_TEXT_MODEL,
       toggle_history: true,
       memories: [],
       chat_settings: defaultSettings
@@ -43,6 +44,11 @@ export class SessionController {
       if (!('memories' in this.session)) {
         Object.assign(this.session, { memories: [] })
       }
+      if (!this.session.model) {
+        this.session.model = DEFAULT_TEXT_MODEL
+      } else if (this.session.model !== 'not_set') {
+        this.session.model = resolveModelChoice(this.session.model)
+      }
       return this.session
     } catch (e) {
       console.error('getSession error', e)
@@ -54,9 +60,14 @@ export class SessionController {
     chatId: string | number,
     value: Partial<SessionData>
   ): Promise<void> {
+    const sanitizedValue = { ...value }
+    if (sanitizedValue.model && sanitizedValue.model !== 'not_set') {
+      sanitizedValue.model = resolveModelChoice(sanitizedValue.model)
+    }
+
     const newSession = {
       ...this.session,
-      ...value
+      ...sanitizedValue
     }
     try {
       this.session = newSession

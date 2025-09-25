@@ -11,6 +11,7 @@ import axios from 'axios'
 import commands from './commands'
 import { EmbeddingService } from './service/EmbeddingService'
 import { RecordMetadata } from '@pinecone-database/pinecone'
+import { findAllowedModel, resolveModelChoice } from './constants/models'
 
 const botName = '@nairbru007bot'
 
@@ -68,13 +69,21 @@ export async function createBot(env: Env, webhookReply = false) {
       })
 
       if (sessionData?.model === 'not_set') {
+        const requestedModel = userMessage.trim().split(/\s+/)[0]
+        const matchedModel = findAllowedModel(requestedModel)
+        const modelToUse = resolveModelChoice(requestedModel)
+
         await sessionController.updateSession(chatId, {
-          model: userMessage
+          model: modelToUse
         })
+
+        const reply = matchedModel
+          ? `Модель обновлена на ${modelToUse}`
+          : `Модель не распознана. Используем ${modelToUse}.`
 
         return await ctx.telegram.sendMessage(
           chatId,
-          'Модель обновлена',
+          reply,
           sessionData.chat_settings.send_message_option
         )
       }
