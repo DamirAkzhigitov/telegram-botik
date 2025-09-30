@@ -135,49 +135,123 @@ export async function createBot(env: Env, webhookReply = false) {
         }
       }
 
-      let image = ''
-      if ('photo' in ctx.message) {
-        const instance = axios.create({
-          baseURL: 'https://api.telegram.org/',
-          timeout: 1000
-        })
-        const photo = ctx.message.photo
-        // Get the highest resolution photo available
-        const fileId = photo[photo.length - 1].file_id
-        const file = await bot.telegram.getFile(fileId)
-        const downloadLink = `file/bot${env.BOT_TOKEN}/${file.file_path}`
+      const telegramFileClient = axios.create({
+        baseURL: 'https://api.telegram.org/',
+        timeout: 1000
+      })
+
+      const imageInputs: OpenAI.Responses.ResponseInputImage[] = []
+
+      const guessMimeFromPath = (filePath: string): string => {
+        const extension = filePath.split('.').pop()?.toLowerCase()
+        switch (extension) {
+          case 'png':
+            return 'image/png'
+          case 'webp':
+            return 'image/webp'
+          case 'gif':
+            return 'image/gif'
+          case 'bmp':
+            return 'image/bmp'
+          case 'jpeg':
+          case 'jpg':
+            return 'image/jpeg'
+          default:
+            return 'image/jpeg'
+        }
+      }
+
+      const downloadTelegramImage = async (
+        fileId: string,
+        explicitMime?: string | null
+      ) => {
         try {
-          const response = await instance.get(downloadLink, {
+          const file = await bot.telegram.getFile(fileId)
+          if (!file.file_path) return null
+
+          const downloadLink = `file/bot${env.BOT_TOKEN}/${file.file_path}`
+          const response = await telegramFileClient.get(downloadLink, {
             responseType: 'arraybuffer'
           })
           const base64Image = Buffer.from(response.data).toString('base64')
-          image = `data:image/jpeg;base64,${base64Image}`
-        } catch (e) {
-          console.error('failed download', e)
+          const mimeType = explicitMime || guessMimeFromPath(file.file_path)
+          return `data:${mimeType};base64,${base64Image}`
+        } catch (error) {
+          console.error('Failed to download Telegram image', error)
+          return null
+        }
+      }
+
+      if ('photo' in ctx.message) {
+        const photo = ctx.message.photo
+        const fileId = photo[photo.length - 1].file_id
+        const imageUrl = await downloadTelegramImage(fileId, 'image/jpeg')
+        if (imageUrl) {
+          imageInputs.push({
+            type: 'input_image',
+            image_url: imageUrl,
+            detail: 'auto'
+          })
+        }
+      } else if ('document' in ctx.message && ctx.message.document) {
+        const { mime_type, file_id } = ctx.message.document
+        if (mime_type && mime_type.startsWith('image/')) {
+          const imageUrl = await downloadTelegramImage(file_id, mime_type)
+          if (imageUrl) {
+            imageInputs.push({
+              type: 'input_image',
+              image_url: imageUrl,
+              detail: 'auto'
+            })
+          }
         }
       }
 
       const message = `${('caption' in ctx.message && ctx.message.caption) || userMessage}`
-      const content: OpenAI.Responses.ResponseInputMessageContentList = [
-        {
-          type: 'input_text',
-          text: `${username}: ${message}`
-        }
-      ]
+      const trimmedMessage = message.trim()
+      const content: OpenAI.Responses.ResponseInputMessageContentList = []
 
-      // if (image) content.push({
-      //   type: 'input_image',
-      //   file_data: image
-      // })
+      if (trimmedMessage.length > 0) {
+        content.push({
+          type: 'input_text',
+          text: `${username}: ${trimmedMessage}`
+        })
+      } else if (imageInputs.length > 0) {
+        content.push({
+          type: 'input_text',
+          text: `${username} отправил изображение`
+        })
+      }
+
+      content.push(...imageInputs)
+
+      if (content.length === 0) {
+        content.push({
+          type: 'input_text',
+          text: `${username}: ${trimmedMessage || 'отправил сообщение без текста'}`
+        })
+      }
 
       const newMessage: OpenAI.Responses.ResponseInputItem.Message = {
         role: 'user',
         content: content
       }
 
+      const loggedMessage = {
+        ...newMessage,
+        content: newMessage.content.map((item) =>
+          item.type === 'input_image'
+            ? {
+                ...item,
+                image_url: '[data-url omitted]'
+              }
+            : item
+        )
+      }
+
       console.log({
         log: 'newMessage',
-        newMessage
+        newMessage: loggedMessage
       })
 
       if (message.length > 10 && sessionData.toggle_history) {
