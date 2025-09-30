@@ -363,92 +363,92 @@ export async function createBot(env: Env, webhookReply = false) {
         })
       }
 
-      const asyncActions = responseMessages.map(async ({ content, type }) => {
-        if (type === 'emoji') {
-          const stickerSet = getRandomValueArr(sessionData.stickersPacks)
-          const response = await ctx.telegram.getStickerSet(stickerSet)
-          const stickerByEmoji = findByEmoji(
-            response.stickers as Sticker[],
-            content
-          )
-          console.log({
-            log: 'sendSticker',
-            chatId,
-            content: stickerByEmoji.file_id,
-            send_message_option: sessionData.chat_settings.send_message_option
-          })
+      async function sendResponsesSequentially() {
+        for (const { content, type } of responseMessages) {
+          if (type === 'emoji') {
+            const stickerSet = getRandomValueArr(sessionData.stickersPacks)
+            const response = await ctx.telegram.getStickerSet(stickerSet)
+            const stickerByEmoji = findByEmoji(
+              response.stickers as Sticker[],
+              content
+            )
+            console.log({
+              log: 'sendSticker',
+              chatId,
+              content: stickerByEmoji.file_id,
+              send_message_option: sessionData.chat_settings.send_message_option
+            })
 
-          return ctx.telegram.sendSticker(
-            chatId,
-            stickerByEmoji.file_id,
-            sessionData.chat_settings.send_message_option
-          )
-        } else if (type === 'text') {
-          console.log({
-            log: 'sendMessage',
-            chatId,
-            content: content,
-            send_message_option: sessionData.chat_settings.send_message_option
-          })
+            await ctx.telegram.sendSticker(
+              chatId,
+              stickerByEmoji.file_id,
+              sessionData.chat_settings.send_message_option
+            )
+          } else if (type === 'text') {
+            console.log({
+              log: 'sendMessage',
+              chatId,
+              content: content,
+              send_message_option: sessionData.chat_settings.send_message_option
+            })
 
-          return ctx.telegram.sendMessage(chatId, content, {
-            ...sessionData.chat_settings.send_message_option,
-            parse_mode: 'Markdown'
-          })
-        } else if (type === 'reaction') {
-          console.log({
-            log: 'setMessageReaction',
-            chatId,
-            content: content,
-            message_id: ctx.message.message_id
-          })
+            await ctx.telegram.sendMessage(chatId, content, {
+              ...sessionData.chat_settings.send_message_option,
+              parse_mode: 'Markdown'
+            })
+          } else if (type === 'reaction') {
+            console.log({
+              log: 'setMessageReaction',
+              chatId,
+              content: content,
+              message_id: ctx.message.message_id
+            })
 
-          return ctx.telegram.setMessageReaction(
-            chatId,
-            ctx.message.message_id,
-            [
+            await ctx.telegram.setMessageReaction(
+              chatId,
+              ctx.message.message_id,
+              [
+                {
+                  type: 'emoji',
+                  emoji: content
+                }
+              ]
+            )
+          } else if (type === 'image') {
+            await userService.deductCoins(ctx.from.id, 1, 'image_generation')
+            const form = new FormData()
+
+            const blob = base64ToBlob(content, 'image/jpeg')
+            const file = new File([blob], 'image.jpg', { type: 'image/jpeg' })
+
+            form.append('chat_id', String(chatId))
+            form.append('photo', file)
+
+            if (sessionData.chat_settings.thread_id) {
+              form.append(
+                'message_thread_id',
+                String(sessionData.chat_settings.thread_id)
+              )
+            }
+
+            await fetch(
+              `https://api.telegram.org/bot${env.BOT_TOKEN}/sendPhoto`,
               {
-                type: 'emoji',
-                emoji: content
+                method: 'POST',
+                body: form
               }
-            ]
-          )
-        } else if (type === 'image') {
-          await userService.deductCoins(ctx.from.id, 1, 'image_generation')
-          const form = new FormData()
-
-          const blob = base64ToBlob(content, 'image/jpeg')
-          const file = new File([blob], 'image.jpg', { type: 'image/jpeg' })
-
-          form.append('chat_id', String(chatId))
-          form.append('photo', file)
-
-          if (sessionData.chat_settings.thread_id) {
-            form.append(
-              'message_thread_id',
-              String(sessionData.chat_settings.thread_id)
             )
           }
-
-          await fetch(
-            `https://api.telegram.org/bot${env.BOT_TOKEN}/sendPhoto`,
-            {
-              method: 'POST',
-              body: form
-            }
-          )
         }
-      })
+      }
 
-      await Promise.all([
-        ctx.telegram.sendChatAction(
-          chatId,
-          'typing',
-          sessionData.chat_settings.send_message_option
-        ),
-        delay,
-        ...asyncActions
-      ])
+      await ctx.telegram.sendChatAction(
+        chatId,
+        'typing',
+        sessionData.chat_settings.send_message_option
+      )
+      await delay()
+      await sendResponsesSequentially()
     } catch (error) {
       console.error('Error processing message:', error)
     }
