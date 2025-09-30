@@ -2,7 +2,7 @@ import { getOpenAIClient } from './gpt'
 import { Telegraf } from 'telegraf'
 import { message } from 'telegraf/filters'
 import { base64ToBlob, delay, findByEmoji, getRandomValueArr } from './utils'
-import { Sticker, Message } from './types'
+import { Sticker, SessionData } from './types'
 import { SessionController } from './service/SessionController'
 import { UserService } from './service/UserService'
 import OpenAI from 'openai'
@@ -14,6 +14,30 @@ import { RecordMetadata } from '@pinecone-database/pinecone'
 import { findAllowedModel, resolveModelChoice } from './constants/models'
 
 const botName = '@nairbru007bot'
+const IMAGE_PLACEHOLDER_TEXT = '[image omitted - already processed]'
+
+const sanitizeHistoryMessages = (
+  messages: SessionData['userMessages']
+): SessionData['userMessages'] =>
+  messages.map((message) => {
+    if (message.role !== 'user') return message
+
+    const userMessage = message as OpenAI.Responses.ResponseInputItem.Message
+    const sanitizedContent = userMessage.content.map((item) => {
+      if (item.type === 'input_image') {
+        return {
+          type: 'input_text',
+          text: IMAGE_PLACEHOLDER_TEXT
+        } as OpenAI.Responses.ResponseInputText
+      }
+      return item
+    })
+
+    return {
+      ...userMessage,
+      content: sanitizedContent
+    }
+  })
 
 export async function createBot(env: Env, webhookReply = false) {
   const { responseApi } = getOpenAIClient(env.API_KEY)
@@ -291,6 +315,10 @@ export async function createBot(env: Env, webhookReply = false) {
 
       const hasEnoughCoins = await userService.hasEnoughCoins(ctx.from.id, 1)
 
+      const historyMessages = sanitizeHistoryMessages(
+        sessionData.userMessages
+      )
+
       const botMessages = await responseApi(
         [
           ...formattedMemories,
@@ -306,7 +334,7 @@ export async function createBot(env: Env, webhookReply = false) {
                 ]
               }) as unknown as OpenAI.Responses.ResponseOutputMessage
           ),
-          ...sessionData.userMessages,
+          ...historyMessages,
           newMessage
         ],
         {
@@ -341,7 +369,7 @@ export async function createBot(env: Env, webhookReply = false) {
       )
 
       const messages = [
-        ...sessionData.userMessages,
+        ...historyMessages,
         newMessage,
         ...botMessages.map(
           (message) =>
@@ -358,8 +386,9 @@ export async function createBot(env: Env, webhookReply = false) {
       ]
 
       if (sessionData.toggle_history) {
+        const sanitizedForStorage = sanitizeHistoryMessages(messages)
         await sessionController.updateSession(chatId, {
-          userMessages: messages.splice(-20)
+          userMessages: sanitizedForStorage.slice(-20)
         })
       }
 
