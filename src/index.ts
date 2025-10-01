@@ -1,4 +1,4 @@
-import { createBot } from './bot/createBot'
+import { createBot } from './bot'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
