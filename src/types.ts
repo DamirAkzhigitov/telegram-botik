@@ -25,7 +25,6 @@ export interface SessionData {
   stickersPacks: string[]
   prompt: string
   firstTime: boolean
-  promptNotSet: boolean
   stickerNotSet: boolean
   toggle_history: boolean
   model?: AllowedTextModel | 'not_set'
@@ -64,8 +63,9 @@ export interface Message {
   content: string
 }
 
-export interface MemoryResponse {
-  type: 'memory'
+export interface ObjectiveResponse {
+  type: 'objective'
+  objective: 'new_prompt'
   content: string
 }
 
@@ -74,6 +74,7 @@ export type MessagesArray = (
   | EmojiResponse
   | MemoryResponse
   | ImageResponse
+  | ObjectiveResponse
 )[]
 
 // User and coin system types
