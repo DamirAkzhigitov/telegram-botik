@@ -28,7 +28,6 @@ export function help(bot: Telegraf<Context<any>>, sessionController: any, userSe
 /buy <amount> — Purchase coins (min: 5, max: 1000)
 
 **Bot Configuration:**
-/set_new_prompt — Set new bot prompt
 /add_sticker_pack — Add new sticker pack
 /reset_sticker_pack — Reset current sticker pack
 /set_reply_chance — Set bot reply probability

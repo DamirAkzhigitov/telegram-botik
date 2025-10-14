@@ -48,23 +48,6 @@ export const ensureSessionReady = async ({
     sessionData.firstTime = false
   }
 
-  if (sessionData.promptNotSet) {
-    await sessionController.updateSession(chatId, {
-      prompt: userMessage,
-      promptNotSet: false
-    })
-
-    await ctx.telegram.sendMessage(
-      chatId,
-      'Системный промт обновлен!',
-      sessionData.chat_settings.send_message_option
-    )
-
-    sessionData.prompt = userMessage
-    sessionData.promptNotSet = false
-    return false
-  }
-
   if (sessionData.stickerNotSet) {
     const message = ctx.message as any
     if (message?.sticker?.set_name) {

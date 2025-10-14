@@ -20,7 +20,6 @@ export class SessionController {
       stickersPacks: [defaultStickerPack],
       prompt: '',
       firstTime: true,
-      promptNotSet: false,
       stickerNotSet: false,
       model: DEFAULT_TEXT_MODEL,
       toggle_history: true,

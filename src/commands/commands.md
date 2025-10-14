@@ -4,7 +4,6 @@ buy - Purchase coins (min: 5, max: 1000)
 add_sticker_pack - Add new sticker pack
 reset_sticker_pack - Reset current sticker pack
 set_reply_chance - Set bot reply probability
-set_new_prompt - Set new bot prompt
 get_prompt - Show current prompt
 show_memories - Show saved chat information
 clear_memories - Clear all saved chat data

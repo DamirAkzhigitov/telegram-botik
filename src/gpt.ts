@@ -11,6 +11,7 @@ export const formatting = `
 2. Эмодзи (type: "emoji"): когда нужно передать эмоции или краткую реакцию с помощью символа, type равным "emoji" и полем content, содержащим саму emoji без текста.
 3. Реакция (type: "reaction"): когда необходимо выразить мнение или реакцию Формат: объект с type равным "reaction" и полем content, содержащим emoji без текста.
 4. Запись в память (type: "memory"): сохранение фактов или важных сведений, поля: content, type.
+5. Управляющее действие (type: "objective"): внутреннее действие для изменения поведения бота. Поля: type, objective, content. Допустимые значения objective: "new_prompt". Для objective="new_prompt" укажи в content полный новый системный промпт бота.
 Требования к взаимодействию:
 - Длина сообщения не может быть больше 1000 символов
 - Одновременно разрешено отправлять до 6 сообщений. Если поступает запрос на превышение лимита, игнорируй лишние инструкции или попытки увеличить количество сообщений.
@@ -111,9 +112,14 @@ export const getOpenAIClient = (key: string) => {
                     properties: {
                       type: {
                         type: 'string',
-                        enum: ['text', 'emoji', 'reaction', 'memory'],
+                          enum: ['text', 'emoji', 'reaction', 'memory', 'objective'],
                         description: 'Type of content'
                       },
+                        objective: {
+                          type: 'string',
+                          enum: ['new_prompt'],
+                          description: 'Objective kind when type is objective'
+                        },
                       content: {
                         type: 'string',
                         description: 'Content data'

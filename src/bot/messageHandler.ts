@@ -5,7 +5,7 @@ import { EmbeddingService } from '../service/EmbeddingService'
 import { SessionController } from '../service/SessionController'
 import { UserService } from '../service/UserService'
 import type { MessagesArray } from '../types'
-import { composeUserContent, createLoggedMessage, createUserMessage, extractMemoryItems, filterResponseMessages } from './messageBuilder'
+import { composeUserContent, createLoggedMessage, createUserMessage, extractMemoryItems, filterResponseMessages, extractObjectiveItems } from './messageBuilder'
 import { sanitizeHistoryMessages, buildAssistantHistoryMessages } from './history'
 import { collectImageInputs } from './media'
 import { ensureSessionReady } from './sessionGuards'
@@ -198,6 +198,22 @@ export const handleIncomingMessage = async (
   if (sessionData.toggle_history) {
     for (const memoryItem of memoryItems) {
       await deps.sessionController.addMemory(chatId, memoryItem.content)
+    }
+  }
+
+  const objectiveItems = extractObjectiveItems(botMessages)
+
+  for (const objective of objectiveItems) {
+    if (objective.objective === 'new_prompt') {
+      await deps.sessionController.updateSession(chatId, {
+        prompt: objective.content
+      })
+      await deps.ctx.telegram.sendMessage(
+        chatId,
+        'Системный промт обновлен!',
+        sessionData.chat_settings.send_message_option
+      )
+      sessionData.prompt = objective.content
     }
   }
 
