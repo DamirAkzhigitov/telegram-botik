@@ -204,15 +204,10 @@ export const handleIncomingMessage = async (
   const objectiveItems = extractObjectiveItems(botMessages)
 
   for (const objective of objectiveItems) {
-    if (objective.objective === 'new_prompt') {
+    if (objective.objective === 'new_prompt' || (objective as any).objective === 'set_prompt') {
       await deps.sessionController.updateSession(chatId, {
         prompt: objective.content
       })
-      await deps.ctx.telegram.sendMessage(
-        chatId,
-        'Системный промт обновлен!',
-        sessionData.chat_settings.send_message_option
-      )
       sessionData.prompt = objective.content
     }
   }
@@ -222,7 +217,8 @@ export const handleIncomingMessage = async (
   const messages = [
     ...historyMessages,
     newMessage,
-    ...buildAssistantHistoryMessages(botMessages)
+    // Store only user-visible assistant messages, exclude memory/objective
+    ...buildAssistantHistoryMessages(responseMessages)
   ]
 
   if (sessionData.toggle_history) {

@@ -65,7 +65,7 @@ export interface Message {
 
 export interface ObjectiveResponse {
   type: 'objective'
-  objective: 'new_prompt'
+  objective: 'new_prompt' | 'set_prompt'
   content: string
 }
 

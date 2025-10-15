@@ -77,6 +77,11 @@ export const extractMemoryItems = (botMessages: MessagesArray) =>
 export const extractObjectiveItems = (
   botMessages: MessagesArray
 ): ObjectiveResponse[] =>
-  botMessages.filter(
-    (item) => (item as any).type === 'objective'
-  ) as ObjectiveResponse[]
+  (botMessages.filter((item) => {
+    const it = item as any
+    return (
+      it?.type === 'objective' &&
+      typeof it.content === 'string' &&
+      (it.objective === 'new_prompt' || it.objective === 'set_prompt')
+    )
+  }) as unknown) as ObjectiveResponse[]
