@@ -125,7 +125,7 @@ export const getOpenAIClient = (key: string) => {
                         description: 'Content data'
                       }
                     },
-                    required: ['type', 'content'],
+                    required: ['type', 'content', 'objective'],
                     additionalProperties: false
                   }
                 }
