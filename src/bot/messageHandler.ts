@@ -5,8 +5,17 @@ import { EmbeddingService } from '../service/EmbeddingService'
 import { SessionController } from '../service/SessionController'
 import { UserService } from '../service/UserService'
 import type { MessagesArray } from '../types'
-import { composeUserContent, createLoggedMessage, createUserMessage, extractMemoryItems, filterResponseMessages } from './messageBuilder'
-import { sanitizeHistoryMessages, buildAssistantHistoryMessages } from './history'
+import {
+  composeUserContent,
+  createLoggedMessage,
+  createUserMessage,
+  extractMemoryItems,
+  filterResponseMessages
+} from './messageBuilder'
+import {
+  sanitizeHistoryMessages,
+  buildAssistantHistoryMessages
+} from './history'
 import { collectImageInputs } from './media'
 import { ensureSessionReady } from './sessionGuards'
 import { dispatchResponsesSequentially } from './responseDispatcher'
@@ -39,6 +48,7 @@ export const handleIncomingMessage = async (
   ctx: Context,
   deps: MessageHandlerDeps
 ) => {
+  console.log('ctx: ', JSON.stringify(ctx, null, 2))
   if (ctx.message?.from?.is_bot) return
 
   try {
@@ -62,9 +72,9 @@ export const handleIncomingMessage = async (
     : true
 
   const username =
+    ctx.message?.from?.username ||
     ctx.message?.from?.first_name ||
     ctx.message?.from?.last_name ||
-    ctx.message?.from?.username ||
     'Anonymous'
   const rawMessage =
     (typeof ctx.message?.text === 'string' ? ctx.message.text : '') || ''
@@ -106,9 +116,8 @@ export const handleIncomingMessage = async (
     imageInputs
   })
 
-  const newMessage: OpenAI.Responses.ResponseInputItem.Message = createUserMessage(
-    content
-  )
+  const newMessage: OpenAI.Responses.ResponseInputItem.Message =
+    createUserMessage(content)
 
   const loggedMessage = createLoggedMessage(newMessage)
 

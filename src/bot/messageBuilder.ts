@@ -36,7 +36,7 @@ export const composeUserContent = ({
   if (content.length === 0) {
     content.push({
       type: 'input_text',
-      text: `${username}: ${trimmedMessage || 'отправил сообщение без текста'}`
+      text: `${username}: ${trimmedMessage}`
     })
   }
 
