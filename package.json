@@ -10,6 +10,7 @@
     "dev:local": "tsx --env-file=.env.local ./src/local-test.ts",
     "start": "wrangler dev",
     "test": "vitest",
+    "test:coverage": "vitest run --coverage",
     "cf-typegen": "wrangler types",
     "serve": "ngrok http --url=better-suitably-monkey.ngrok-free.app 8787",
     "dev:full": "node scripts/start-dev.js",
@@ -29,6 +30,7 @@
     "tsx": "4.19.3",
     "typescript": "5.5.2",
     "vitest": "2.1.9",
+    "@vitest/coverage-v8": "2.1.9",
     "wrangler": "4.28.0"
   },
   "dependencies": {
