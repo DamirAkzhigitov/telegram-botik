@@ -1,0 +1,264 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import type { Context } from 'telegraf'
+import type { AxiosInstance } from 'axios'
+import { handleIncomingMessage } from '../../src/bot/messageHandler'
+import type { SessionData } from '../../src/types'
+
+// Mocks for modules used inside messageHandler
+vi.mock('../../src/bot/sessionGuards', () => ({
+  ensureSessionReady: vi.fn().mockResolvedValue(true)
+}))
+
+vi.mock('../../src/bot/media', () => ({
+  collectImageInputs: vi.fn().mockResolvedValue([])
+}))
+
+vi.mock('../../src/bot/history', () => ({
+  sanitizeHistoryMessages: vi.fn((msgs: any) => msgs),
+  buildAssistantHistoryMessages: vi.fn(() => [
+    {
+      role: 'assistant',
+      content: [{ type: 'output_text', text: 'A1' }]
+    }
+  ])
+}))
+
+vi.mock('../../src/bot/messageBuilder', () => ({
+  composeUserContent: vi.fn(({ username, trimmedMessage }: any) => [
+    { type: 'input_text', text: `${username}: ${trimmedMessage}` }
+  ]),
+  createUserMessage: vi.fn((content: any) => ({ role: 'user', content })),
+  createLoggedMessage: vi.fn((m: any) => m),
+  extractMemoryItems: vi.fn((msgs: any[]) => msgs.filter((m) => m.type === 'memory')),
+  filterResponseMessages: vi.fn((msgs: any[]) => msgs.filter((m) => m.type !== 'memory'))
+}))
+
+vi.mock('../../src/bot/responseDispatcher', () => ({
+  dispatchResponsesSequentially: vi.fn().mockResolvedValue(undefined)
+}))
+
+vi.mock('../../src/utils', () => ({
+  delay: vi.fn().mockResolvedValue(undefined)
+}))
+
+// Helpers to access mocks
+const ensureSessionReady = (await import('../../src/bot/sessionGuards')).ensureSessionReady as unknown as ReturnType<typeof vi.fn>
+const collectImageInputs = (await import('../../src/bot/media')).collectImageInputs as unknown as ReturnType<typeof vi.fn>
+const sanitizeHistoryMessages = (await import('../../src/bot/history')).sanitizeHistoryMessages as unknown as ReturnType<typeof vi.fn>
+const buildAssistantHistoryMessages = (await import('../../src/bot/history')).buildAssistantHistoryMessages as unknown as ReturnType<typeof vi.fn>
+const composeUserContent = (await import('../../src/bot/messageBuilder')).composeUserContent as unknown as ReturnType<typeof vi.fn>
+const createUserMessage = (await import('../../src/bot/messageBuilder')).createUserMessage as unknown as ReturnType<typeof vi.fn>
+const createLoggedMessage = (await import('../../src/bot/messageBuilder')).createLoggedMessage as unknown as ReturnType<typeof vi.fn>
+const extractMemoryItems = (await import('../../src/bot/messageBuilder')).extractMemoryItems as unknown as ReturnType<typeof vi.fn>
+const filterResponseMessages = (await import('../../src/bot/messageBuilder')).filterResponseMessages as unknown as ReturnType<typeof vi.fn>
+const dispatchResponsesSequentially = (await import('../../src/bot/responseDispatcher')).dispatchResponsesSequentially as unknown as ReturnType<typeof vi.fn>
+const delay = (await import('../../src/utils')).delay as unknown as ReturnType<typeof vi.fn>
+
+
+describe('messageHandler', () => {
+  let ctx: Partial<Context>
+  let env: Env
+  let responseApi: any
+  let embeddingService: any
+  let sessionController: any
+  let userService: any
+  let telegramFileClient: AxiosInstance
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    ctx = {
+      from: { id: 42, username: 'alice', is_bot: false } as any,
+      chat: { id: 777 } as any,
+      message: {
+        text: 'hello bot message',
+        message_id: 10,
+        from: {
+          id: 42,
+          username: 'alice',
+          first_name: undefined,
+          last_name: undefined,
+          is_bot: false
+        }
+      } as any,
+      telegram: {
+        sendChatAction: vi.fn().mockResolvedValue(undefined)
+      } as any
+    }
+
+    env = { BOT_TOKEN: 'token' } as Env
+
+    responseApi = vi.fn().mockResolvedValue([
+      { type: 'memory', content: 'remember this' },
+      { type: 'text', content: 'Hi human' }
+    ])
+
+    embeddingService = {
+      saveMessage: vi.fn().mockResolvedValue(undefined),
+      fetchRelevantMessages: vi.fn().mockResolvedValue([
+        { id: '1', content: 'old msg', score: 0.9 }
+      ])
+    }
+
+    sessionController = {
+      getSession: vi.fn().mockResolvedValue({
+        userMessages: [],
+        stickersPacks: [],
+        prompt: '',
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        toggle_history: true,
+        model: 'gpt-4o-mini',
+        chat_settings: {
+          reply_only_in_thread: false,
+          send_message_option: {}
+        }
+      } as SessionData),
+      getFormattedMemories: vi.fn().mockReturnValue([
+        { role: 'system', content: [{ type: 'input_text', text: 'mem' }] }
+      ]),
+      addMemory: vi.fn().mockResolvedValue(undefined),
+      updateSession: vi.fn().mockResolvedValue(undefined)
+    }
+
+    userService = {
+      registerOrGetUser: vi.fn().mockResolvedValue(undefined),
+      hasEnoughCoins: vi.fn().mockResolvedValue(true)
+    }
+
+    telegramFileClient = {} as any
+  })
+
+  describe('happy path with history enabled', () => {
+    it('builds message, calls API, stores memory, updates session, dispatches', async () => {
+      await handleIncomingMessage(ctx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient
+      })
+
+      expect(userService.registerOrGetUser).toHaveBeenCalledWith({
+        id: 42,
+        username: 'alice',
+        first_name: undefined,
+        last_name: undefined
+      })
+
+      expect(sessionController.getSession).toHaveBeenCalledWith(777)
+      expect(ensureSessionReady).toHaveBeenCalled()
+      expect(collectImageInputs).toHaveBeenCalled()
+      expect(composeUserContent).toHaveBeenCalled()
+      expect(createUserMessage).toHaveBeenCalled()
+      expect(createLoggedMessage).toHaveBeenCalled()
+
+      // history related
+      expect(embeddingService.saveMessage).toHaveBeenCalled()
+      expect(embeddingService.fetchRelevantMessages).toHaveBeenCalledWith(777, 'hello bot message')
+      expect(sessionController.getFormattedMemories).toHaveBeenCalled()
+
+      // API called with options
+      expect(responseApi).toHaveBeenCalled()
+      const [, options] = responseApi.mock.calls[0]
+      expect(options).toEqual({ hasEnoughCoins: true, model: 'gpt-4o-mini', prompt: '' })
+
+      // After API
+      expect(extractMemoryItems).toHaveBeenCalled()
+      expect(filterResponseMessages).toHaveBeenCalled()
+
+      // session update
+      expect(sanitizeHistoryMessages).toHaveBeenCalled()
+      expect(buildAssistantHistoryMessages).toHaveBeenCalled()
+      expect(sessionController.updateSession).toHaveBeenCalledWith(777, expect.objectContaining({ userMessages: expect.any(Array) }))
+
+      // dispatch and UX
+      expect(ctx.telegram!.sendChatAction).toHaveBeenCalledWith(777, 'typing', {})
+      expect(delay).toHaveBeenCalled()
+      expect(dispatchResponsesSequentially).toHaveBeenCalled()
+    })
+  })
+
+  describe('early return cases', () => {
+    it('returns early when message is from a bot', async () => {
+      const botCtx = { ...ctx, message: { ...(ctx.message as any), from: { id: 1, is_bot: true } } } as any
+
+      await handleIncomingMessage(botCtx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient
+      })
+
+      expect(userService.registerOrGetUser).not.toHaveBeenCalled()
+      expect(sessionController.getSession).not.toHaveBeenCalled()
+    })
+
+    it('returns early when no chat id', async () => {
+      const noChatCtx = { ...ctx, chat: undefined } as any
+      await handleIncomingMessage(noChatCtx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient
+      })
+
+      expect(userService.registerOrGetUser).toHaveBeenCalled()
+      expect(sessionController.getSession).not.toHaveBeenCalled()
+    })
+
+    it('reply_only_in_thread prevents response outside the thread', async () => {
+      sessionController.getSession.mockResolvedValueOnce({
+        userMessages: [],
+        stickersPacks: [],
+        prompt: '',
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        toggle_history: false,
+        chat_settings: {
+          reply_only_in_thread: true,
+          thread_id: 999,
+          send_message_option: {}
+        }
+      } as SessionData)
+
+      // message has no thread id, so should not reply
+      await handleIncomingMessage(ctx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient
+      })
+
+      expect(responseApi).not.toHaveBeenCalled()
+      expect(dispatchResponsesSequentially).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('responseApi returns null', () => {
+    it('stops flow when API returns null', async () => {
+      responseApi.mockResolvedValueOnce(null)
+
+      await handleIncomingMessage(ctx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient
+      })
+
+      expect(dispatchResponsesSequentially).not.toHaveBeenCalled()
+      expect(sessionController.updateSession).not.toHaveBeenCalled()
+    })
+  })
+})
