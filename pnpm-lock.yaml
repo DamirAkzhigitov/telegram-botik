@@ -26,14 +26,14 @@ importers:
         version: 4.16.3
       vite:
         specifier: ^6.4.1
-        version: 6.4.1(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1)
+        version: 6.4.1(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1)
       zod:
         specifier: ^4.1.3
         version: 4.1.12
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.10.3
-        version: 0.10.3(@vitest/runner@2.1.9)(@vitest/snapshot@2.1.9)(vitest@2.1.9(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1))
+        version: 0.10.3(@vitest/runner@2.1.9)(@vitest/snapshot@2.1.9)(vitest@2.1.9(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1))
       '@eslint/js':
         specifier: ^9.39.0
         version: 9.39.0
@@ -48,7 +48,7 @@ importers:
         version: 8.46.2(eslint@9.39.0)(typescript@5.5.2)
       '@vitest/coverage-v8':
         specifier: 2.1.9
-        version: 2.1.9(vitest@2.1.9(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1))
+        version: 2.1.9(vitest@2.1.9(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1))
       eslint:
         specifier: ^9.39.0
         version: 9.39.0
@@ -74,8 +74,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.1
       tsx:
-        specifier: 4.19.3
-        version: 4.19.3
+        specifier: 4.20.6
+        version: 4.20.6
       typescript:
         specifier: 5.5.2
         version: 5.5.2
@@ -84,7 +84,7 @@ importers:
         version: 8.46.2(eslint@9.39.0)(typescript@5.5.2)
       vitest:
         specifier: 2.1.9
-        version: 2.1.9(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1)
+        version: 2.1.9(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1)
       wrangler:
         specifier: 4.28.0
         version: 4.28.0
@@ -1762,8 +1762,8 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
-  tsx@4.19.3:
-    resolution: {integrity: sha512-4H8vUNGNjQ4V2EOoGw005+c+dGuPSnhpPBPHBtsZdGZBk/iJb4kguGlPWaZTZ3q5nMtFOEsY0nRDlh9PJyd6SQ==}
+  tsx@4.20.6:
+    resolution: {integrity: sha512-ytQKuwgmrrkDTFP4LjR0ToE2nqgy886GpvRSpU0JAnrdBYppuY5rLkRUYPU1yCryb24SsKBTL/hlDQAEFVwtZg==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -2009,7 +2009,7 @@ snapshots:
     optionalDependencies:
       workerd: 1.20251011.0
 
-  '@cloudflare/vitest-pool-workers@0.10.3(@vitest/runner@2.1.9)(@vitest/snapshot@2.1.9)(vitest@2.1.9(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1))':
+  '@cloudflare/vitest-pool-workers@0.10.3(@vitest/runner@2.1.9)(@vitest/snapshot@2.1.9)(vitest@2.1.9(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1))':
     dependencies:
       '@vitest/runner': 2.1.9
       '@vitest/snapshot': 2.1.9
@@ -2018,7 +2018,7 @@ snapshots:
       devalue: 5.4.2
       miniflare: 4.20251011.1
       semver: 7.7.3
-      vitest: 2.1.9(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1)
+      vitest: 2.1.9(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1)
       wrangler: 4.45.3
       zod: 3.25.76
     transitivePeerDependencies:
@@ -2507,7 +2507,7 @@ snapshots:
       '@typescript-eslint/types': 8.46.2
       eslint-visitor-keys: 4.2.1
 
-  '@vitest/coverage-v8@2.1.9(vitest@2.1.9(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1))':
+  '@vitest/coverage-v8@2.1.9(vitest@2.1.9(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1))':
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@bcoe/v8-coverage': 0.2.3
@@ -2521,7 +2521,7 @@ snapshots:
       std-env: 3.10.0
       test-exclude: 7.0.1
       tinyrainbow: 1.2.0
-      vitest: 2.1.9(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1)
+      vitest: 2.1.9(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -2532,13 +2532,13 @@ snapshots:
       chai: 5.3.3
       tinyrainbow: 1.2.0
 
-  '@vitest/mocker@2.1.9(vite@6.4.1(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1))':
+  '@vitest/mocker@2.1.9(vite@6.4.1(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1))':
     dependencies:
       '@vitest/spy': 2.1.9
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 6.4.1(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1)
+      vite: 6.4.1(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1)
 
   '@vitest/pretty-format@2.1.9':
     dependencies:
@@ -3513,7 +3513,7 @@ snapshots:
   tslib@2.8.1:
     optional: true
 
-  tsx@4.19.3:
+  tsx@4.20.6:
     dependencies:
       esbuild: 0.25.11
       get-tsconfig: 4.13.0
@@ -3563,13 +3563,13 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  vite-node@2.1.9(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1):
+  vite-node@2.1.9(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1):
     dependencies:
       cac: 6.7.14
       debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 1.1.2
-      vite: 6.4.1(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1)
+      vite: 6.4.1(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1)
     transitivePeerDependencies:
       - '@types/node'
       - jiti
@@ -3584,7 +3584,7 @@ snapshots:
       - tsx
       - yaml
 
-  vite@6.4.1(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1):
+  vite@6.4.1(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1):
     dependencies:
       esbuild: 0.25.11
       fdir: 6.5.0(picomatch@4.0.3)
@@ -3595,13 +3595,13 @@ snapshots:
     optionalDependencies:
       '@types/node': 20.8.3
       fsevents: 2.3.3
-      tsx: 4.19.3
+      tsx: 4.20.6
       yaml: 2.8.1
 
-  vitest@2.1.9(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1):
+  vitest@2.1.9(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1):
     dependencies:
       '@vitest/expect': 2.1.9
-      '@vitest/mocker': 2.1.9(vite@6.4.1(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1))
+      '@vitest/mocker': 2.1.9(vite@6.4.1(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1))
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.9
       '@vitest/snapshot': 2.1.9
@@ -3617,8 +3617,8 @@ snapshots:
       tinyexec: 0.3.2
       tinypool: 1.1.1
       tinyrainbow: 1.2.0
-      vite: 6.4.1(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1)
-      vite-node: 2.1.9(@types/node@20.8.3)(tsx@4.19.3)(yaml@2.8.1)
+      vite: 6.4.1(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1)
+      vite-node: 2.1.9(@types/node@20.8.3)(tsx@4.20.6)(yaml@2.8.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 20.8.3

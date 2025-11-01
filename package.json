@@ -58,7 +58,7 @@
     "lint-staged": "^16.2.6",
     "prettier": "3.5.3",
     "prettier-plugin-organize-imports": "^4.2.0",
-    "tsx": "4.19.3",
+    "tsx": "4.20.6",
     "strip-literal": "^2.1.0",
     "typescript": "5.5.2",
     "typescript-eslint": "^8.46.2",
