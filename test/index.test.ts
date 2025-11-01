@@ -7,7 +7,7 @@ const mockBot = {
 }
 
 vi.mock('../src/bot/createBot', () => ({
-  createBot: vi.fn(() => Promise.resolve(mockBot))
+  createBot: vi.fn(() => mockBot)
 }))
 
 // Mock API endpoints

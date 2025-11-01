@@ -50,24 +50,30 @@ export const dispatchResponsesSequentially = async (
         parse_mode: 'Markdown'
       })
     } else if (type === 'reaction') {
+      const messageId = deps.ctx.message?.message_id
+      if (!messageId) {
+        console.warn('Cannot set message reaction: message_id is undefined')
+        continue
+      }
+
       console.log({
         log: 'setMessageReaction',
         chatId: deps.ctx.chat.id,
         content,
-        message_id: deps.ctx.message?.message_id
+        message_id: messageId
       })
 
-      await deps.ctx.telegram.setMessageReaction(
-        deps.ctx.chat.id,
-        deps.ctx.message?.message_id,
-        [
-          {
-            type: 'emoji',
-            emoji: content
-          }
-        ]
-      )
+      await deps.ctx.telegram.setMessageReaction(deps.ctx.chat.id, messageId, [
+        {
+          type: 'emoji',
+          emoji: content
+        }
+      ])
     } else if (type === 'image') {
+      if (!deps.ctx.from) {
+        console.warn('Cannot deduct coins: ctx.from is undefined')
+        continue
+      }
       await deps.userService.deductCoins(
         deps.ctx.from.id,
         1,

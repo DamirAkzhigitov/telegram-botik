@@ -1,5 +1,6 @@
 import { createBot } from './bot/createBot'
 import { getSessions, getSession, getAdminChats } from './api/sessions'
+import type { Update } from 'telegraf/types'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -14,12 +15,13 @@ async function handleUpdate(request: Request, env: Env) {
   // Handle POST requests for Telegram webhooks
   if (request.method === 'POST') {
     try {
-      const bot = await createBot(env)
-      const update = await request.json()
-      await bot.handleUpdate(update as any)
+      const bot = createBot(env)
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+      const update = (await request.json()) as Update
+      await bot.handleUpdate(update)
 
       return new Response('OK')
-    } catch (error) {
+    } catch {
       return new Response('Invalid request', { status: 400 })
     }
   }
@@ -85,7 +87,7 @@ async function handleApiRequest(
   })
 }
 
-async function serveAdminPanel(request: Request, env: Env): Promise<Response> {
+function serveAdminPanel(_request: Request, _env: Env): Response {
   // For now, return a simple HTML that will load the React app
   // In production, this should serve from static assets
   const html = `<!DOCTYPE html>

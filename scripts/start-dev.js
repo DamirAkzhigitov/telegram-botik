@@ -53,7 +53,7 @@ async function checkNgrok() {
   try {
     execSync('ngrok version', { stdio: 'ignore' })
     return true
-  } catch (error) {
+  } catch {
     return false
   }
 }

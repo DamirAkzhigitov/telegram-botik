@@ -1,10 +1,11 @@
 import { Context, Telegraf } from 'telegraf'
 import type { SessionController } from '../service/SessionController'
+import type { UserService } from '../service/UserService'
 
 export function configureChatSettings(
-  bot: Telegraf<Context<any>>,
+  bot: Telegraf<Context>,
   sessionController: SessionController,
-  userService?: any
+  _userService?: UserService
 ) {
   bot.command('set_tread_id', async (ctx) => {
     try {
@@ -18,9 +19,9 @@ export function configureChatSettings(
 
       const topicId = parseInt(prompt)
       if (!prompt || !topicId) {
-        return await ctx.reply(
-          `❌ Пожалуйста, укажите id топика !\n\n` + { parse_mode: 'Markdown' }
-        )
+        return await ctx.reply(`❌ Пожалуйста, укажите id топика !\n\n`, {
+          parse_mode: 'Markdown'
+        })
       }
       await sessionController.getSession(ctx.chat.id)
       await sessionController.updateSession(ctx.chat.id, {

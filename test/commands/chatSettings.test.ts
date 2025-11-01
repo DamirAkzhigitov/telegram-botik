@@ -60,7 +60,7 @@ describe('configureChatSettings command', () => {
         promptNotSet: false,
         stickerNotSet: false,
         toggle_history: true,
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         memories: [],
         chat_settings: {}
       }
@@ -100,7 +100,7 @@ describe('configureChatSettings command', () => {
         promptNotSet: false,
         stickerNotSet: false,
         toggle_history: true,
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         memories: [],
         chat_settings: {}
       } as SessionData)
@@ -109,7 +109,8 @@ describe('configureChatSettings command', () => {
       await handler(ctxWithNoId as Context)
 
       expect(ctxWithNoId.reply).toHaveBeenCalledWith(
-        expect.stringContaining('Пожалуйста, укажите id топика')
+        expect.stringContaining('Пожалуйста, укажите id топика'),
+        expect.objectContaining({ parse_mode: 'Markdown' })
       )
       expect(sessionController.updateSession).not.toHaveBeenCalled()
     })
@@ -128,7 +129,7 @@ describe('configureChatSettings command', () => {
         promptNotSet: false,
         stickerNotSet: false,
         toggle_history: true,
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         memories: [],
         chat_settings: {}
       } as SessionData)
@@ -137,7 +138,8 @@ describe('configureChatSettings command', () => {
       await handler(ctxWithInvalidId as Context)
 
       expect(ctxWithInvalidId.reply).toHaveBeenCalledWith(
-        expect.stringContaining('Пожалуйста, укажите id топика')
+        expect.stringContaining('Пожалуйста, укажите id топика'),
+        expect.objectContaining({ parse_mode: 'Markdown' })
       )
       expect(sessionController.updateSession).not.toHaveBeenCalled()
     })
@@ -156,7 +158,7 @@ describe('configureChatSettings command', () => {
         promptNotSet: false,
         stickerNotSet: false,
         toggle_history: true,
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         memories: [],
         chat_settings: {}
       } as SessionData)
@@ -177,7 +179,7 @@ describe('configureChatSettings command', () => {
         promptNotSet: false,
         stickerNotSet: false,
         toggle_history: true,
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         memories: [],
         chat_settings: {}
       }
@@ -235,7 +237,7 @@ describe('configureChatSettings command', () => {
         promptNotSet: false,
         stickerNotSet: false,
         toggle_history: true,
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         memories: [],
         chat_settings: {}
       }
@@ -263,7 +265,7 @@ describe('configureChatSettings command', () => {
         promptNotSet: false,
         stickerNotSet: false,
         toggle_history: true,
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1-mini',
         memories: [],
         chat_settings: {
           reply_only_in_thread: false

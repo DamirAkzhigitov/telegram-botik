@@ -1,10 +1,11 @@
 import { Context, Telegraf } from 'telegraf'
 import type { SessionController } from '../service/SessionController'
+import type { UserService } from '../service/UserService'
 
 export function showMemories(
-  bot: Telegraf<Context<any>>,
+  bot: Telegraf<Context>,
   sessionController: SessionController,
-  userService?: any
+  _userService?: UserService
 ) {
   bot.command('show_memories', async (ctx) => {
     try {

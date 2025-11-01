@@ -144,7 +144,14 @@ export const getOpenAIClient = (key: string) => {
         const output_text = message.content.find(
           (item) => item.type === 'output_text'
         )
-        if (output_text?.text) items.push(...JSON.parse(output_text.text).items)
+        if (output_text?.text) {
+          const parsed = JSON.parse(output_text.text) as {
+            items?: MessagesArray
+          }
+          if (parsed.items && Array.isArray(parsed.items)) {
+            items.push(...parsed.items)
+          }
+        }
       }
 
       if (image_generation && image_generation.result) {

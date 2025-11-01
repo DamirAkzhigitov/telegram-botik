@@ -119,7 +119,7 @@ describe('createBot', () => {
 
   it('should set up message handler', async () => {
     const { Telegraf } = await import('telegraf')
-    const { message } = await import('telegraf/filters')
+    await import('telegraf/filters')
     const mockBot = {
       on: vi.fn(),
       command: vi.fn()

@@ -40,7 +40,7 @@ export class SessionController {
   async getSession(chatId: string | number): Promise<SessionData> {
     try {
       const data = await this.env.CHAT_SESSIONS_STORAGE.get(`session_${chatId}`)
-      if (data) this.session = JSON.parse(data)
+      if (data) this.session = JSON.parse(data) as SessionData
       if (!('memories' in this.session)) {
         Object.assign(this.session, { memories: [] })
       }
