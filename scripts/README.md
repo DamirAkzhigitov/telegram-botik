@@ -5,11 +5,13 @@ This directory contains scripts to manage webhook setup and environment switchin
 ## Prerequisites
 
 1. **Bot Token**: Make sure your bot token is available in one of these locations:
+
    - Environment variable: `BOT_TOKEN`
    - `.env` file: `BOT_TOKEN=your_bot_token_here`
    - `.env.local` file: `BOT_TOKEN=your_bot_token_here`
 
 2. **ngrok** (for development): Install ngrok for local development tunneling
+
    ```bash
    npm install -g ngrok
    # or download from https://ngrok.com/download
@@ -34,10 +36,13 @@ Before using the scripts, update the configuration in `scripts/config.js`:
 ### Development Environment
 
 #### Full Development Setup
+
 ```bash
 npm run dev:full
 ```
+
 This script will:
+
 - Check if ngrok is installed and install it if needed
 - Start an ngrok tunnel to your local Wrangler dev server
 - Set the webhook to the ngrok URL
@@ -45,6 +50,7 @@ This script will:
 - Clean up everything when you stop the process (Ctrl+C)
 
 #### Manual Webhook Management
+
 ```bash
 # Set webhook to development (ngrok)
 npm run webhook:set-dev
@@ -56,16 +62,20 @@ npm run webhook:switch-dev
 ### Production Environment
 
 #### Full Production Deployment
+
 ```bash
 npm run deploy:prod
 ```
+
 This script will:
+
 - Deploy your worker to Cloudflare Workers
 - Test the webhook endpoint
 - Set the webhook to your production URL
 - Display bot information
 
 #### Manual Webhook Management
+
 ```bash
 # Set webhook to production
 npm run webhook:set-prod
@@ -95,18 +105,21 @@ The scripts will look for these environment variables:
 ## Usage Examples
 
 ### Starting Development
+
 ```bash
 # Start full development environment
 npm run dev:full
 ```
 
 ### Deploying to Production
+
 ```bash
 # Deploy and set up production webhook
 npm run deploy:prod
 ```
 
 ### Switching Between Environments
+
 ```bash
 # Switch from production to development
 npm run webhook:switch-dev
@@ -116,6 +129,7 @@ npm run webhook:switch-prod
 ```
 
 ### Checking Webhook Status
+
 ```bash
 # Check current webhook configuration
 npm run webhook:info
@@ -126,15 +140,18 @@ npm run webhook:info
 ### Common Issues
 
 1. **Bot token not found**
+
    - Make sure your bot token is in the environment or .env files
    - Check that the token is valid
 
 2. **ngrok not working**
+
    - Install ngrok globally: `npm install -g ngrok`
    - Or download from https://ngrok.com/download
    - Make sure you're not behind a restrictive firewall
 
 3. **Webhook URL not accessible**
+
    - For development: Make sure ngrok is running and the URL is correct
    - For production: Make sure your Cloudflare Worker is deployed and accessible
 
@@ -146,11 +163,13 @@ npm run webhook:info
 ### Debugging
 
 Use the webhook info command to check the current state:
+
 ```bash
 npm run webhook:info
 ```
 
 This will show you:
+
 - Current webhook URL
 - Webhook status
 - Last error (if any)
@@ -172,4 +191,4 @@ scripts/
 ├── setup-webhook.js    # Webhook management script
 ├── start-dev.js        # Development environment setup
 └── deploy-prod.js      # Production deployment script
-``` 
+```

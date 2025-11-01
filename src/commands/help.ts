@@ -33,10 +33,18 @@ export function help(
 
       // Check if user is admin in this chat (if it's a group)
       let showAdminButton = false
-      if (ctx.chat && (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') && env && ctx.from) {
+      if (
+        ctx.chat &&
+        (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') &&
+        env &&
+        ctx.from
+      ) {
         try {
           const adminAuthService = new AdminAuthService(env, env.BOT_TOKEN)
-          const isAdmin = await adminAuthService.verifyAdminStatus(ctx.chat.id, ctx.from.id)
+          const isAdmin = await adminAuthService.verifyAdminStatus(
+            ctx.chat.id,
+            ctx.from.id
+          )
           showAdminButton = isAdmin
         } catch (error) {
           console.error('Error checking admin status:', error)
@@ -44,7 +52,7 @@ export function help(
       }
 
       const keyboard: InlineKeyboardButton[][] = []
-      
+
       if (showAdminButton) {
         const workerUrl = getWorkerUrl()
         keyboard.push([
@@ -86,7 +94,8 @@ export function help(
 				`,
         {
           parse_mode: 'Markdown',
-          reply_markup: keyboard.length > 0 ? { inline_keyboard: keyboard } : undefined
+          reply_markup:
+            keyboard.length > 0 ? { inline_keyboard: keyboard } : undefined
         }
       )
     } catch (error) {

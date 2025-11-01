@@ -13,7 +13,8 @@ export async function authenticateRequest(
   env: Env
 ): Promise<{ userId: number; adminAuthService: AdminAuthService } | null> {
   const url = new URL(request.url)
-  const initData = url.searchParams.get('_auth') || url.searchParams.get('initData')
+  const initData =
+    url.searchParams.get('_auth') || url.searchParams.get('initData')
 
   if (!initData) {
     return null
@@ -31,5 +32,3 @@ export async function authenticateRequest(
     adminAuthService
   }
 }
-
-

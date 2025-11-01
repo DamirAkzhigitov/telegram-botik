@@ -23,6 +23,7 @@ NODE_ENV=development
 Edit `scripts/config.js` and update the following values:
 
 ### Development Configuration
+
 ```javascript
 dev: {
   webhookUrl: 'https://your-ngrok-url.ngrok-free.app', // Will be auto-detected
@@ -33,6 +34,7 @@ dev: {
 ```
 
 ### Production Configuration
+
 ```javascript
 prod: {
   webhookUrl: 'https://my-first-worker.your-subdomain.workers.dev',
@@ -41,15 +43,16 @@ prod: {
 ```
 
 ### Worker Configuration
+
 ```javascript
 // Update these functions with your actual values
 export function getWorkerName() {
-  return 'my-first-worker'; // Your actual worker name from wrangler.jsonc
+  return 'my-first-worker' // Your actual worker name from wrangler.jsonc
 }
 
 export function getWorkerUrl() {
-  const workerName = getWorkerName();
-  return `https://${workerName}.your-subdomain.workers.dev`; // Your actual subdomain
+  const workerName = getWorkerName()
+  return `https://${workerName}.your-subdomain.workers.dev` // Your actual subdomain
 }
 ```
 
@@ -76,11 +79,13 @@ For better development experience, you can set up ngrok authentication:
 ## Step 6: Cloudflare Workers Setup
 
 1. Install Wrangler CLI:
+
    ```bash
    npm install -g wrangler
    ```
 
 2. Login to Cloudflare:
+
    ```bash
    npx wrangler login
    ```
@@ -90,11 +95,13 @@ For better development experience, you can set up ngrok authentication:
 ## Step 7: Test Your Setup
 
 1. Check webhook status:
+
    ```bash
    npm run webhook:info
    ```
 
 2. Start development:
+
    ```bash
    npm run dev:full
    ```
@@ -107,21 +114,25 @@ For better development experience, you can set up ngrok authentication:
 ## Troubleshooting
 
 ### Bot Token Issues
+
 - Make sure the token is valid and not expired
 - Check that the bot is not already in use by another webhook
 - Verify the token format (should be numbers:letters)
 
 ### ngrok Issues
+
 - Install ngrok globally: `npm install -g ngrok`
 - Check if your firewall is blocking ngrok
 - Try different regions if one doesn't work
 
 ### Cloudflare Workers Issues
+
 - Make sure you're logged in: `npx wrangler login`
 - Check your account has Workers enabled
 - Verify your worker name is unique
 
 ### Webhook Issues
+
 - Make sure the URL is accessible from the internet
 - Check that your bot can receive webhooks
-- Verify the webhook URL is using HTTPS 
+- Verify the webhook URL is using HTTPS

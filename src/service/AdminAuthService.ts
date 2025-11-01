@@ -145,9 +145,7 @@ export class AdminAuthService {
 
       const status = data.result?.status
       return (
-        status === 'administrator' ||
-        status === 'creator' ||
-        status === 'owner'
+        status === 'administrator' || status === 'creator' || status === 'owner'
       )
     } catch (error) {
       console.error('Error verifying admin status:', error)
@@ -176,7 +174,7 @@ export class AdminAuthService {
       // Check admin status for each chat in parallel (with limit)
       const adminChats: string[] = []
       const chatIdArray = Array.from(chatIdSet)
-      
+
       // Process in batches to avoid rate limits
       const batchSize = 10
       for (let i = 0; i < chatIdArray.length; i += batchSize) {

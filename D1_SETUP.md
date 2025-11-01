@@ -10,6 +10,7 @@ This guide will help you set up the Cloudflare D1 database for the bot's user re
 ## Step 1: Create D1 Database
 
 1. Create a new D1 database:
+
 ```bash
 wrangler d1 create bot-users-db
 ```
@@ -19,6 +20,7 @@ wrangler d1 create bot-users-db
 ## Step 2: Update Configuration
 
 1. Update `wrangler.jsonc` with your database ID:
+
 ```json
 "d1_databases": [
   {
@@ -34,22 +36,26 @@ wrangler d1 create bot-users-db
 ## Step 3: Apply Database Schema
 
 1. Apply the schema to your database:
+
 ```bash
 wrangler d1 execute bot-users-db --file=./schema.sql
 ```
 
 2. Verify the tables were created:
+
 ```bash
 wrangler d1 execute bot-users-db --command="SELECT name FROM sqlite_master WHERE type='table';"
 ```
 
 You should see:
+
 - `users`
 - `transactions`
 
 ## Step 4: Deploy
 
 1. Deploy your worker:
+
 ```bash
 wrangler deploy
 ```
@@ -59,6 +65,7 @@ wrangler deploy
 The database includes two main tables:
 
 ### Users Table
+
 - `id`: Primary key
 - `telegram_id`: Unique Telegram user ID
 - `username`: Telegram username (optional)
@@ -69,6 +76,7 @@ The database includes two main tables:
 - `updated_at`: Last update timestamp
 
 ### Transactions Table
+
 - `id`: Primary key
 - `user_id`: Foreign key to users table
 - `action_type`: Type of action (e.g., 'registration', 'image_generation')
@@ -92,8 +100,9 @@ The database includes two main tables:
 ## Development
 
 For local development, you can use:
+
 ```bash
 wrangler dev
 ```
 
-This will start a local development server with the D1 database binding. 
+This will start a local development server with the D1 database binding.

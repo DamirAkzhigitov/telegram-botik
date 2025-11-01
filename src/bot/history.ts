@@ -28,14 +28,15 @@ export const sanitizeHistoryMessages = (
 export const buildAssistantHistoryMessages = (
   botMessages: MessagesArray
 ): OpenAI.Responses.ResponseOutputMessage[] =>
-  botMessages.map((message) =>
-    ({
-      role: 'assistant',
-      content: [
-        {
-          type: 'output_text',
-          text: message.type === 'image' ? 'image' : message.content
-        }
-      ]
-    }) as OpenAI.Responses.ResponseOutputMessage
+  botMessages.map(
+    (message) =>
+      ({
+        role: 'assistant',
+        content: [
+          {
+            type: 'output_text',
+            text: message.type === 'image' ? 'image' : message.content
+          }
+        ]
+      }) as OpenAI.Responses.ResponseOutputMessage
   )
