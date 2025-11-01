@@ -11,6 +11,19 @@ async function handleUpdate(request: Request, env: Env) {
   const url = new URL(request.url)
   const pathname = url.pathname
 
+  // Handle POST requests for Telegram webhooks
+  if (request.method === 'POST') {
+    try {
+      const bot = await createBot(env)
+      const update = await request.json()
+      await bot.handleUpdate(update as any)
+
+      return new Response('OK')
+    } catch (error) {
+      return new Response('Invalid request', { status: 400 })
+    }
+  }
+
   // Handle GET requests for admin panel and API
   if (request.method === 'GET') {
     // API endpoints
@@ -28,20 +41,17 @@ async function handleUpdate(request: Request, env: Env) {
       return new Response('OK', { status: 200 })
     }
 
+    // If path looks like a webhook endpoint, return 405 for non-POST
+    if (pathname === '/webhook' || pathname.startsWith('/webhook/')) {
+      return new Response('Method Not Allowed', { status: 405 })
+    }
+
     return new Response('Not Found', { status: 404 })
   }
 
-  // Handle POST requests for Telegram webhooks
-  if (request.method === 'POST') {
-    try {
-      const bot = await createBot(env)
-      const update = await request.json()
-      await bot.handleUpdate(update as any)
-
-      return new Response('OK')
-    } catch (error) {
-      return new Response('Invalid request', { status: 400 })
-    }
+  // For all other methods, check if it's a webhook path
+  if (pathname === '/webhook' || pathname.startsWith('/webhook/')) {
+    return new Response('Method Not Allowed', { status: 405 })
   }
 
   return new Response('Method Not Allowed', { status: 405 })
