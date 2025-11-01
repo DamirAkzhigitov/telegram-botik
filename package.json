@@ -1,8 +1,25 @@
 {
-  "name": "my-first-worker",
+  "name": "telegram-botik",
   "version": "0.0.0",
-  "private": true,
+  "description": "A Telegram bot built with Telegraf and OpenAI API, deployed on Cloudflare Workers",
+  "private": false,
   "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "telegram",
+    "bot",
+    "telegraf",
+    "openai",
+    "gpt-4",
+    "cloudflare-workers",
+    "wrangler",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DamirAkzhigitov/telegram-botik.git"
+  },
+  "author": "Damir Akzhigitov",
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
@@ -12,6 +29,9 @@
     "start": "wrangler dev",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "cf-typegen": "wrangler types",
     "serve": "ngrok http --url=better-suitably-monkey.ngrok-free.app 8787",
     "dev:full": "node scripts/start-dev.js",
@@ -27,7 +47,12 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.8.60",
     "@types/node": "20.8.3",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
     "@vitest/coverage-v8": "2.1.9",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^8.10.0",
+    "eslint-plugin-prettier": "^5.2.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
     "prettier": "3.5.3",
@@ -52,7 +77,11 @@
     ]
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,json,md,yml,yaml}": [
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
       "prettier --check"
     ]
   }

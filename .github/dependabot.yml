@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+    open-pull-requests-limit: 10
+    labels:
+      - 'dependencies'
+      - 'automated'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+    reviewers:
+      - ''
+    assignees:
+      - ''
+    ignore:
+      # Ignore major version updates for critical packages
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'wrangler'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'vitest'
+        update-types: ['version-update:semver-major']
