@@ -1,8 +1,23 @@
 import { Context, Telegraf } from 'telegraf'
-
+import { InlineKeyboardButton } from 'telegraf/types'
 import { UserService } from '../service/UserService'
+import { AdminAuthService } from '../service/AdminAuthService'
 
-export function help(bot: Telegraf<Context<any>>, sessionController: any, userService?: UserService, env?: Env) {
+function getWorkerUrl(): string {
+  // Try to get from env variable, otherwise construct from worker name
+  // In production, this should be set as an environment variable
+  // For now, use a default pattern - this should be configured per environment
+  const workerName = 'my-first-worker'
+  const subdomain = 'damir-cy.workers.dev' // Update this to match your actual subdomain
+  return `https://${workerName}.${subdomain}`
+}
+
+export function help(
+  bot: Telegraf<Context<any>>,
+  sessionController: any,
+  userService?: UserService,
+  env?: Env
+) {
   bot.command('help', async (ctx) => {
     try {
       let balanceInfo = ''
@@ -14,6 +29,30 @@ export function help(bot: Telegraf<Context<any>>, sessionController: any, userSe
         } catch (error) {
           console.error('Error getting balance for help:', error)
         }
+      }
+
+      // Check if user is admin in this chat (if it's a group)
+      let showAdminButton = false
+      if (ctx.chat && (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') && env && ctx.from) {
+        try {
+          const adminAuthService = new AdminAuthService(env, env.BOT_TOKEN)
+          const isAdmin = await adminAuthService.verifyAdminStatus(ctx.chat.id, ctx.from.id)
+          showAdminButton = isAdmin
+        } catch (error) {
+          console.error('Error checking admin status:', error)
+        }
+      }
+
+      const keyboard: InlineKeyboardButton[][] = []
+      
+      if (showAdminButton) {
+        const workerUrl = getWorkerUrl()
+        keyboard.push([
+          {
+            text: '🔧 Open Admin Panel',
+            web_app: { url: `${workerUrl}/admin` }
+          } as InlineKeyboardButton
+        ])
       }
 
       await ctx.telegram.sendMessage(
@@ -45,7 +84,10 @@ export function help(bot: Telegraf<Context<any>>, sessionController: any, userSe
 • Purchase more coins with /buy <amount>
 • Check your balance with /balance
 				`,
-        { parse_mode: 'Markdown' }
+        {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard.length > 0 ? { inline_keyboard: keyboard } : undefined
+        }
       )
     } catch (error) {
       console.error('Error help:', error)
