@@ -20,8 +20,7 @@ vi.mock('../../src/utils', () => ({
     )
   }),
   getRandomValueArr: vi.fn((arr: any[]) => {
-    // Return first element for deterministic test behavior
-    return arr.length > 0 ? arr[0] : undefined
+    return arr[Math.floor(Math.random() * arr.length)]
   })
 }))
 
@@ -348,8 +347,9 @@ describe('responseDispatcher', () => {
         env: mockEnv
       })
 
-      // Mock now returns first element deterministically
-      expect(mockTelegram.getStickerSet).toHaveBeenCalledWith('pack1')
+      expect(mockTelegram.getStickerSet).toHaveBeenCalled()
+      const calledWith = mockTelegram.getStickerSet.mock.calls[0][0]
+      expect(['pack1', 'pack2', 'pack3']).toContain(calledWith)
     })
   })
 })
