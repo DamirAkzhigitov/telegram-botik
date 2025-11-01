@@ -14,7 +14,7 @@ export interface Memory {
 export interface ChatSettings {
   thread_id?: number
   reply_only_in_thread?: boolean
-  send_message_option?: Record<string, any>
+  send_message_option?: Record<string, unknown>
 }
 
 export interface SessionData {

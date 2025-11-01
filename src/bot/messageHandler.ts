@@ -51,6 +51,8 @@ export const handleIncomingMessage = async (
   console.log('ctx: ', JSON.stringify(ctx, null, 2))
   if (ctx.message?.from?.is_bot) return
 
+  if (!ctx.message?.from) return
+
   try {
     await deps.userService.registerOrGetUser({
       id: ctx.message.from.id,
@@ -77,7 +79,11 @@ export const handleIncomingMessage = async (
     ctx.message?.from?.last_name ||
     'Anonymous'
   const rawMessage =
-    (typeof ctx.message?.text === 'string' ? ctx.message.text : '') || ''
+    (ctx.message &&
+    'text' in ctx.message &&
+    typeof ctx.message.text === 'string'
+      ? ctx.message.text
+      : '') || ''
   const userMessage = rawMessage.replace(BOT_NAME, '')
 
   console.log({
@@ -107,7 +113,13 @@ export const handleIncomingMessage = async (
 
   const imageInputs = await collectImageInputs(ctx, mediaDeps)
 
-  const message = `${(ctx.message as any)?.caption || userMessage}`
+  const caption =
+    ctx.message &&
+    'caption' in ctx.message &&
+    typeof ctx.message.caption === 'string'
+      ? ctx.message.caption
+      : ''
+  const message = `${caption || userMessage}`
   const trimmedMessage = message.trim()
 
   const content = composeUserContent({
@@ -161,6 +173,7 @@ export const handleIncomingMessage = async (
     formattedMemories
   })
 
+  if (!ctx.from) return
   const hasEnoughCoins = await deps.userService.hasEnoughCoins(ctx.from.id, 1)
 
   const historyMessages = sanitizeHistoryMessages(sessionData.userMessages)
@@ -175,7 +188,13 @@ export const handleIncomingMessage = async (
             content: [
               {
                 type: 'input_text',
-                text: (item as any)?.content
+                text:
+                  item &&
+                  typeof item === 'object' &&
+                  'content' in item &&
+                  typeof item.content === 'string'
+                    ? item.content
+                    : ''
               }
             ]
           }) as unknown as OpenAI.Responses.ResponseOutputMessage

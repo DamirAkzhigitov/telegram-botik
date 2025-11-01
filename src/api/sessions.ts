@@ -1,6 +1,5 @@
 import { authenticateRequest } from './auth'
 import { SessionController } from '../service/SessionController'
-import type { SessionData } from '../types'
 
 interface SessionSummary {
   chatId: string

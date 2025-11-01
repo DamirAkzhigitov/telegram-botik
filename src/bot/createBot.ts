@@ -8,7 +8,7 @@ import { getOpenAIClient } from '../gpt'
 import { createTelegramFileClient } from './media'
 import { handleIncomingMessage } from './messageHandler'
 
-export const createBot = async (env: Env, webhookReply = false) => {
+export const createBot = (env: Env, webhookReply = false) => {
   const { responseApi } = getOpenAIClient(env.API_KEY)
 
   const embeddingService = new EmbeddingService(env)

@@ -8,7 +8,7 @@ export const sanitizeHistoryMessages = (
   messages.map((message) => {
     if (message.role !== 'user') return message
 
-    const userMessage = message as OpenAI.Responses.ResponseInputItem.Message
+    const userMessage = message
     const sanitizedContent = userMessage.content.map((item) => {
       if (item.type === 'input_image') {
         return {

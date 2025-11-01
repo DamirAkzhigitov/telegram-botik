@@ -289,7 +289,6 @@ describe('SessionController', () => {
         new Error('Storage error')
       )
 
-      const originalSession = { ...sessionController.session }
       await sessionController.updateSession(999, {
         prompt: 'Should fail'
       })

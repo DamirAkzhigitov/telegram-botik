@@ -46,11 +46,12 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.8.60",
+    "@eslint/js": "^9.39.0",
     "@types/node": "20.8.3",
-    "@typescript-eslint/eslint-plugin": "^8.0.0",
-    "@typescript-eslint/parser": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
     "@vitest/coverage-v8": "2.1.9",
-    "eslint": "^8.57.0",
+    "eslint": "^9.39.0",
     "eslint-config-prettier": "^8.10.0",
     "eslint-plugin-prettier": "^5.2.1",
     "husky": "^9.1.7",
@@ -59,6 +60,7 @@
     "prettier-plugin-organize-imports": "^4.2.0",
     "tsx": "4.19.3",
     "typescript": "5.5.2",
+    "typescript-eslint": "^8.46.2",
     "vitest": "2.1.9",
     "wrangler": "4.28.0"
   },

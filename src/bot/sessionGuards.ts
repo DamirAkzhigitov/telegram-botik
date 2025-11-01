@@ -66,15 +66,23 @@ export const ensureSessionReady = async ({
   }
 
   if (sessionData.stickerNotSet) {
-    const message = ctx.message as any
-    if (message?.sticker?.set_name) {
+    const message = ctx.message
+    if (
+      message &&
+      'sticker' in message &&
+      message.sticker &&
+      typeof message.sticker === 'object' &&
+      'set_name' in message.sticker &&
+      typeof message.sticker.set_name === 'string'
+    ) {
       const onlyDefault = sessionController.isOnlyDefaultStickerPack()
-      let newPack = sessionData.stickersPacks
+      let newPack: string[] = sessionData.stickersPacks
+      const setName = message.sticker.set_name
 
       if (onlyDefault) {
-        newPack = [message.sticker.set_name]
+        newPack = [setName]
       } else {
-        newPack = [...newPack, message.sticker.set_name]
+        newPack = [...newPack, setName]
       }
 
       await sessionController.updateSession(chatId, {

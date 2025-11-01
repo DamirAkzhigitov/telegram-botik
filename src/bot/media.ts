@@ -47,7 +47,9 @@ const downloadTelegramImage = async (
     const response = await deps.fileClient.get(downloadLink, {
       responseType: 'arraybuffer'
     })
-    const base64Image = Buffer.from(response.data).toString('base64')
+    const arrayBuffer =
+      response.data instanceof ArrayBuffer ? response.data : new ArrayBuffer(0)
+    const base64Image = Buffer.from(arrayBuffer).toString('base64')
     const mimeType = explicitMime || guessMimeFromPath(file.file_path)
     return `data:${mimeType};base64,${base64Image}`
   } catch (error) {
@@ -61,23 +63,34 @@ export const collectImageInputs = async (
   deps: MediaDependencies
 ): Promise<OpenAI.Responses.ResponseInputImage[]> => {
   const imageInputs: OpenAI.Responses.ResponseInputImage[] = []
-  const message = ctx.message as any
+  const message = ctx.message
 
-  if (message?.photo) {
+  if (message && 'photo' in message && message.photo) {
     const photo = message.photo
-    const fileId = photo[photo.length - 1].file_id
-    const imageUrl = await downloadTelegramImage(deps, fileId, 'image/jpeg')
-    if (imageUrl) {
-      imageInputs.push({
-        type: 'input_image',
-        image_url: imageUrl,
-        detail: 'auto'
-      })
+    if (Array.isArray(photo) && photo.length > 0) {
+      const fileId = photo[photo.length - 1]?.file_id
+      if (fileId) {
+        const imageUrl = await downloadTelegramImage(deps, fileId, 'image/jpeg')
+        if (imageUrl) {
+          imageInputs.push({
+            type: 'input_image',
+            image_url: imageUrl,
+            detail: 'auto'
+          })
+        }
+      }
     }
-  } else if (message?.document) {
-    const { mime_type, file_id } = message.document
-    if (mime_type && mime_type.startsWith('image/')) {
-      const imageUrl = await downloadTelegramImage(deps, file_id, mime_type)
+  } else if (message && 'document' in message && message.document) {
+    const document = message.document
+    const mimeType = document.mime_type
+    const fileId = document.file_id
+    if (
+      mimeType &&
+      typeof mimeType === 'string' &&
+      mimeType.startsWith('image/') &&
+      fileId
+    ) {
+      const imageUrl = await downloadTelegramImage(deps, fileId, mimeType)
       if (imageUrl) {
         imageInputs.push({
           type: 'input_image',

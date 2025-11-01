@@ -12,9 +12,11 @@ function getWorkerUrl(): string {
   return `https://${workerName}.${subdomain}`
 }
 
+import type { SessionController } from '../service/SessionController'
+
 export function help(
-  bot: Telegraf<Context<any>>,
-  sessionController: any,
+  bot: Telegraf<Context>,
+  _sessionController: SessionController,
   userService?: UserService,
   env?: Env
 ) {

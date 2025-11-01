@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import axios from 'axios'
-import { execSync } from 'child_process'
 import { readFileSync, existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -135,7 +134,6 @@ async function getWebhookInfo(token) {
 async function main() {
   const args = process.argv.slice(2)
   const command = args[0]
-  const environment = args[1] || 'dev'
 
   if (!command) {
     console.log('Usage: node setup-webhook.js <command> [environment]')

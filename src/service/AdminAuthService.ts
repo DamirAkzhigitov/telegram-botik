@@ -1,10 +1,3 @@
-interface InitDataParsed {
-  user: string
-  auth_date: string
-  hash: string
-  [key: string]: string
-}
-
 interface TelegramUser {
   id: number
   first_name?: string
@@ -135,7 +128,8 @@ export class AdminAuthService {
         return false
       }
 
-      const data = (await response.json()) as {
+      const jsonData = await response.json()
+      const data = jsonData as {
         ok: boolean
         result?: { status: string }
       }
@@ -160,7 +154,6 @@ export class AdminAuthService {
     try {
       // List all keys from KV storage
       const keys = await this.env.CHAT_SESSIONS_STORAGE.list()
-      const chatIds: string[] = []
 
       // Extract chat IDs from keys (format: session_{chatId})
       const chatIdSet = new Set<string>()
@@ -217,7 +210,8 @@ export class AdminAuthService {
         return null
       }
 
-      const data = (await response.json()) as {
+      const jsonData = await response.json()
+      const data = jsonData as {
         ok: boolean
         result?: {
           id: number

@@ -1,10 +1,11 @@
 import { Context, Telegraf } from 'telegraf'
 import type { SessionController } from '../service/SessionController'
+import type { UserService } from '../service/UserService'
 
 export function useHistory(
-  bot: Telegraf<Context<any>>,
+  bot: Telegraf<Context>,
   sessionController: SessionController,
-  userService?: any
+  _userService?: UserService
 ) {
   bot.command('toggle_history', async (ctx) => {
     try {

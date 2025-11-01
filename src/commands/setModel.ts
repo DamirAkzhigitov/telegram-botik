@@ -1,11 +1,12 @@
 import { Context, Telegraf } from 'telegraf'
 import type { SessionController } from '../service/SessionController'
+import type { UserService } from '../service/UserService'
 import { ALLOWED_TEXT_MODELS, DEFAULT_TEXT_MODEL } from '../constants/models'
 
 export function setModel(
-  bot: Telegraf<Context<any>>,
+  bot: Telegraf<Context>,
   sessionController: SessionController,
-  userService?: any
+  _userService?: UserService
 ) {
   bot.command('set_model', async (ctx) => {
     try {

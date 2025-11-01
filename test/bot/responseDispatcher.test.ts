@@ -314,16 +314,8 @@ describe('responseDispatcher', () => {
         env: mockEnv
       })
 
-      expect(mockTelegram.setMessageReaction).toHaveBeenCalledWith(
-        12345,
-        undefined,
-        [
-          {
-            type: 'emoji',
-            emoji: '👍'
-          }
-        ]
-      )
+      // Should not call setMessageReaction when message_id is undefined
+      expect(mockTelegram.setMessageReaction).not.toHaveBeenCalled()
     })
 
     it('should handle multiple sticker packs', async () => {
