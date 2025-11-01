@@ -7,6 +7,7 @@
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "format": "prettier . --write",
+    "format:check": "prettier . --check",
     "dev:local": "tsx --env-file=.env.local ./src/local-test.ts",
     "start": "wrangler dev",
     "test": "vitest",
@@ -20,17 +21,20 @@
     "webhook:delete": "node scripts/setup-webhook.js delete",
     "webhook:info": "node scripts/setup-webhook.js info",
     "webhook:switch-dev": "node scripts/setup-webhook.js switch-dev",
-    "webhook:switch-prod": "node scripts/setup-webhook.js switch-prod"
+    "webhook:switch-prod": "node scripts/setup-webhook.js switch-prod",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.8.60",
     "@types/node": "20.8.3",
+    "@vitest/coverage-v8": "2.1.9",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
     "prettier": "3.5.3",
     "prettier-plugin-organize-imports": "^4.2.0",
     "tsx": "4.19.3",
     "typescript": "5.5.2",
     "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9",
     "wrangler": "4.28.0"
   },
   "dependencies": {
@@ -45,6 +49,11 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "workerd"
+    ]
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,json,md,yml,yaml}": [
+      "prettier --check"
     ]
   }
 }
