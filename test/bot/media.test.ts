@@ -282,5 +282,99 @@ describe('Media Functions', () => {
       // Should default to image/jpeg for unknown extensions when no mime_type
       expect(result[0].image_url).toContain('data:image/jpeg;base64,')
     })
+
+    it('should handle document with mime_type but no explicit mime in downloadTelegramImage', async () => {
+      const mockFile = {
+        file_path: 'image.xyz' // Unknown extension
+      }
+      const mockResponse = {
+        data: Buffer.from('fake-image-data')
+      }
+
+      mockCtx.message = {
+        document: {
+          file_id: 'doc_123',
+          mime_type: 'image/png',
+          file_name: 'image.xyz'
+        }
+      } as any
+
+      mockTelegram.getFile.mockResolvedValue(mockFile)
+      mockFileClient.get.mockResolvedValue(mockResponse)
+
+      const result = await collectImageInputs(mockCtx as Context, mockDeps)
+
+      expect(result).toHaveLength(1)
+      expect(result[0].image_url).toContain('data:image/png;base64,')
+    })
+
+    it('should handle empty photo array', async () => {
+      mockCtx.message = {
+        photo: []
+      } as any
+
+      const result = await collectImageInputs(mockCtx as Context, mockDeps)
+
+      expect(result).toHaveLength(0)
+      expect(mockTelegram.getFile).not.toHaveBeenCalled()
+    })
+
+    it('should handle photo array with undefined file_id', async () => {
+      mockCtx.message = {
+        photo: [
+          { file_id: undefined, file_unique_id: 'unique_123' },
+          { file_id: undefined, file_unique_id: 'unique_456' }
+        ]
+      } as any
+
+      const result = await collectImageInputs(mockCtx as Context, mockDeps)
+
+      expect(result).toHaveLength(0)
+      expect(mockTelegram.getFile).not.toHaveBeenCalled()
+    })
+
+    it('should handle document without file_id', async () => {
+      mockCtx.message = {
+        document: {
+          mime_type: 'image/png',
+          file_name: 'image.png'
+        }
+      } as any
+
+      const result = await collectImageInputs(mockCtx as Context, mockDeps)
+
+      expect(result).toHaveLength(0)
+      expect(mockTelegram.getFile).not.toHaveBeenCalled()
+    })
+
+    it('should handle document with non-string mime_type', async () => {
+      mockCtx.message = {
+        document: {
+          file_id: 'doc_123',
+          mime_type: 12345 as any, // Invalid type
+          file_name: 'image.png'
+        }
+      } as any
+
+      const result = await collectImageInputs(mockCtx as Context, mockDeps)
+
+      expect(result).toHaveLength(0)
+      expect(mockTelegram.getFile).not.toHaveBeenCalled()
+    })
+
+    it('should handle document with mime_type that does not start with image/', async () => {
+      mockCtx.message = {
+        document: {
+          file_id: 'doc_123',
+          mime_type: 'video/mp4',
+          file_name: 'video.mp4'
+        }
+      } as any
+
+      const result = await collectImageInputs(mockCtx as Context, mockDeps)
+
+      expect(result).toHaveLength(0)
+      expect(mockTelegram.getFile).not.toHaveBeenCalled()
+    })
   })
 })

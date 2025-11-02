@@ -10,5 +10,5 @@ show_memories - Show saved chat information
 clear_memories - Clear all saved chat data
 clear_messages - Clear message history
 set_tread_id - Set Thread ID
-toggle_history - Использовать или нет истортю
+toggle_history - Enable/disable conversation history tracking (when enabled, automatically summarizes after 20 messages)
 set_model - установить новую модель

@@ -37,6 +37,32 @@ export class EmbeddingService {
       }
     ])
   }
+
+  async saveSummary(chatId: number, summaryText: string) {
+    const index = this.pc.Index('botik')
+    const embeddingResponse = await this.openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: summaryText,
+      dimensions: 512
+    })
+
+    const embedding = embeddingResponse.data[0].embedding
+
+    await index.upsert([
+      {
+        id: `${chatId}-summary-${Date.now()}`,
+        values: embedding,
+        metadata: {
+          chatId: String(chatId),
+          type: 'summary',
+          role: 'system',
+          content: summaryText,
+          timestamp: Date.now()
+        }
+      }
+    ])
+  }
+
   async fetchRelevantMessages(chatId: number, query: string, topK = 5) {
     const index = this.pc.Index('botik')
     const embeddingResponse = await this.openai.embeddings.create({
@@ -51,6 +77,29 @@ export class EmbeddingService {
       vector: embedding,
       topK,
       filter: { chatId: { $eq: String(chatId) } },
+      includeMetadata: true
+    })
+
+    return results.matches.map((match) => match.metadata)
+  }
+
+  async fetchRelevantSummaries(chatId: number, query: string, topK = 20) {
+    const index = this.pc.Index('botik')
+    const embeddingResponse = await this.openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: query,
+      dimensions: 512
+    })
+
+    const embedding = embeddingResponse.data[0].embedding
+
+    const results = await index.query({
+      vector: embedding,
+      topK,
+      filter: {
+        chatId: { $eq: String(chatId) },
+        type: { $eq: 'summary' }
+      },
       includeMetadata: true
     })
 

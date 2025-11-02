@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 import OpenAI from 'openai'
 import {
   sanitizeHistoryMessages,
-  buildAssistantHistoryMessages
+  buildAssistantHistoryMessages,
+  formatMessagesForSummarization,
+  createConversationSummary,
+  createSummaryMessage
 } from '../../src/bot/history'
 import type { MessagesArray, SessionData } from '../../src/types'
 import { IMAGE_PLACEHOLDER_TEXT } from '../../src/bot/constants'
@@ -210,6 +213,182 @@ describe('history', () => {
       expect(result[0].content[0].text).toBe('Text')
       expect(result[1].content[0].text).toBe('😀')
       expect(result[2].content[0].text).toBe('image')
+    })
+  })
+
+  describe('formatMessagesForSummarization', () => {
+    it('should format user and assistant messages correctly', () => {
+      const messages: SessionData['userMessages'] = [
+        { role: 'user', content: [{ type: 'input_text', text: 'Hello' }] } as OpenAI.Responses.ResponseInputItem.Message,
+        { role: 'assistant', content: [{ type: 'output_text', text: 'Hi there' }] } as OpenAI.Responses.ResponseOutputMessage
+      ]
+
+      const result = formatMessagesForSummarization(messages)
+      expect(result).toContain('User: Hello')
+      expect(result).toContain('Assistant: Hi there')
+    })
+
+    it('should handle multiple message pairs', () => {
+      const messages: SessionData['userMessages'] = [
+        { role: 'user', content: [{ type: 'input_text', text: 'Q1' }] } as OpenAI.Responses.ResponseInputItem.Message,
+        { role: 'assistant', content: [{ type: 'output_text', text: 'A1' }] } as OpenAI.Responses.ResponseOutputMessage,
+        { role: 'user', content: [{ type: 'input_text', text: 'Q2' }] } as OpenAI.Responses.ResponseInputItem.Message,
+        { role: 'assistant', content: [{ type: 'output_text', text: 'A2' }] } as OpenAI.Responses.ResponseOutputMessage
+      ]
+
+      const result = formatMessagesForSummarization(messages)
+      expect(result).toContain('User: Q1')
+      expect(result).toContain('Assistant: A1')
+      expect(result).toContain('User: Q2')
+      expect(result).toContain('Assistant: A2')
+    })
+
+    it('should filter out non-text content from user messages', () => {
+      const messages: SessionData['userMessages'] = [
+        {
+          role: 'user',
+          content: [
+            { type: 'input_image', image_url: 'data:image/png;base64,AAA' },
+            { type: 'input_text', text: 'Hello' }
+          ]
+        } as OpenAI.Responses.ResponseInputItem.Message,
+        { role: 'assistant', content: [{ type: 'output_text', text: 'Hi' }] } as OpenAI.Responses.ResponseOutputMessage
+      ]
+
+      const result = formatMessagesForSummarization(messages)
+      expect(result).toContain('User: Hello')
+      expect(result).not.toContain('image')
+    })
+
+    it('should handle empty messages', () => {
+      const messages: SessionData['userMessages'] = []
+      const result = formatMessagesForSummarization(messages)
+      expect(result).toBe('')
+    })
+
+    it('should join multiple text items in user message', () => {
+      const messages: SessionData['userMessages'] = [
+        {
+          role: 'user',
+          content: [
+            { type: 'input_text', text: 'First' },
+            { type: 'input_text', text: 'Second' }
+          ]
+        } as OpenAI.Responses.ResponseInputItem.Message
+      ]
+
+      const result = formatMessagesForSummarization(messages)
+      expect(result).toContain('User: First Second')
+    })
+  })
+
+  describe('createSummaryMessage', () => {
+    it('should create a user-assistant summary pair', () => {
+      const summaryText = 'This is a conversation about topic X'
+      const result = createSummaryMessage(summaryText)
+
+      expect(result).toHaveLength(1)
+      expect(result[0].role).toBe('assistant')
+
+      const userMsg = result[0] as OpenAI.Responses.ResponseInputItem.Message
+      expect(userMsg.content[0]).toEqual({
+        type: 'output_text',
+        text: '[Summary] This is a conversation about topic X'
+      })
+    })
+
+    it('should handle empty summary text', () => {
+      const result = createSummaryMessage('')
+      expect(result).toHaveLength(1)
+      const userMsg = result[0] as OpenAI.Responses.ResponseInputItem.Message
+      expect(userMsg.content[0]).toEqual({
+        type: 'output_text',
+        text: '[Summary] '
+      })
+    })
+  })
+
+  describe('createConversationSummary', () => {
+    let mockOpenAI: any
+
+    beforeEach(() => {
+      mockOpenAI = {
+        responses: {
+          create: vi.fn()
+        }
+      }
+    })
+
+    it('should create a summary from messages', async () => {
+      const messages: SessionData['userMessages'] = [
+        { role: 'user', content: [{ type: 'input_text', text: 'What is TypeScript?' }] } as OpenAI.Responses.ResponseInputItem.Message,
+        { role: 'assistant', content: [{ type: 'output_text', text: 'TypeScript is a typed superset of JavaScript' }] } as OpenAI.Responses.ResponseOutputMessage
+      ]
+
+      mockOpenAI.responses.create.mockResolvedValue({
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            content: [
+              {
+                type: 'output_text',
+                text: 'Discussion about TypeScript programming language'
+              }
+            ]
+          }
+        ]
+      })
+
+      const result = await createConversationSummary(messages, mockOpenAI as any)
+
+      expect(result).toBe('Discussion about TypeScript programming language')
+      expect(mockOpenAI.responses.create).toHaveBeenCalledTimes(1)
+      const call = mockOpenAI.responses.create.mock.calls[0][0]
+      expect(call.model).toBeDefined()
+      expect(call.input).toHaveLength(1)
+      expect(call.input[0].role).toBe('user')
+    })
+
+    it('should throw error when response is incomplete', async () => {
+      const messages: SessionData['userMessages'] = [
+        { role: 'user', content: [{ type: 'input_text', text: 'test' }] } as OpenAI.Responses.ResponseInputItem.Message
+      ]
+
+      mockOpenAI.responses.create.mockResolvedValue({
+        status: 'incomplete',
+        incomplete_details: { reason: 'max_tokens' }
+      })
+
+      await expect(createConversationSummary(messages, mockOpenAI as any)).rejects.toThrow('Summarization failed: incomplete response')
+    })
+
+    it('should throw error when no output text found', async () => {
+      const messages: SessionData['userMessages'] = [
+        { role: 'user', content: [{ type: 'input_text', text: 'test' }] } as OpenAI.Responses.ResponseInputItem.Message
+      ]
+
+      mockOpenAI.responses.create.mockResolvedValue({
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            content: []
+          }
+        ]
+      })
+
+      await expect(createConversationSummary(messages, mockOpenAI as any)).rejects.toThrow('No summary text found in response')
+    })
+
+    it('should handle errors gracefully', async () => {
+      const messages: SessionData['userMessages'] = [
+        { role: 'user', content: [{ type: 'input_text', text: 'test' }] } as OpenAI.Responses.ResponseInputItem.Message
+      ]
+
+      mockOpenAI.responses.create.mockRejectedValue(new Error('API error'))
+
+      await expect(createConversationSummary(messages, mockOpenAI as any)).rejects.toThrow('API error')
     })
   })
 })

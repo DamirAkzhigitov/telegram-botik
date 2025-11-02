@@ -9,7 +9,7 @@ import { createTelegramFileClient } from './media'
 import { handleIncomingMessage } from './messageHandler'
 
 export const createBot = (env: Env, webhookReply = false) => {
-  const { responseApi } = getOpenAIClient(env.API_KEY)
+  const { responseApi, openai } = getOpenAIClient(env.API_KEY)
 
   const embeddingService = new EmbeddingService(env)
   const bot = new Telegraf(env.BOT_TOKEN, { telegram: { webhookReply } })
@@ -29,7 +29,8 @@ export const createBot = (env: Env, webhookReply = false) => {
         embeddingService,
         sessionController,
         userService,
-        telegramFileClient
+        telegramFileClient,
+        openai
       })
     } catch (error) {
       console.error('Error processing message:', error)

@@ -15,9 +15,12 @@ This project is a Telegram bot that leverages OpenAI's GPT-4 API to simulate eng
 
 - **AI-Powered Responses:** Utilizing OpenAI's GPT-4 API to generate human-like text responses based on conversation history
 - **Session Management:** Maintains conversation history for users, storing and retrieving the last 50 messages for context
+- **Intelligent History Management:** Optional conversation history tracking with automatic summarization when messages exceed threshold (20 messages)
+- **Conversation Summarization:** Automatically generates AI-powered summaries of long conversations to maintain context while reducing storage overhead
+- **History Sanitization:** Safely stores conversation history by replacing image inputs with placeholders for efficient storage
 - **Multimedia Interaction:** Supports sending text responses, emojis, and reaction stickers
 - **Customizable Bot Behavior:** Adjustable personalities and responses based on defined parameters
-- **Embedding-Based Memory:** Uses vector embeddings for relevant message retrieval
+- **Embedding-Based Memory:** Uses vector embeddings for relevant message retrieval and summary storage
 - **User Balance System:** Integrated coin/balance system for usage tracking
 - **Admin Panel:** Web-based admin interface for managing sessions and users
 - **Cloudflare D1 Database:** Persistent storage for users and session data
@@ -36,8 +39,8 @@ This project is a Telegram bot that leverages OpenAI's GPT-4 API to simulate eng
 1. **Clone the Repository:**
 
    ```bash
-   git clone https://github.com/yourusername/my-first-worker.git
-   cd my-first-worker
+   git clone https://github.com/DamirAkzhigitov/telegram-botik.git
+   cd telegram-botik
    ```
 
 2. **Install Dependencies:**
@@ -102,6 +105,7 @@ src/
 │   ├── createBot.ts       # Bot initialization
 │   ├── messageHandler.ts   # Message processing
 │   ├── messageBuilder.ts  # Message construction
+│   ├── history.ts          # History management and summarization
 │   ├── responseDispatcher.ts
 │   └── ...
 ├── commands/               # Telegram bot commands
@@ -125,9 +129,14 @@ For detailed project structure and guidelines, see [AGENTS.md](AGENTS.md).
 
 1. **Message Reception**: The bot listens for incoming messages through a webhook endpoint
 2. **Session Management**: For each chat, the bot retrieves conversation history and maintains context
-3. **AI Communication**: When a user sends a message, the bot constructs a prompt and requests a response from OpenAI's API
-4. **Response Handling**: The bot processes the API response (text, emojis, reactions) and replies accordingly
-5. **Memory Storage**: Messages are embedded and stored for relevant context retrieval
+3. **History Processing**: When history tracking is enabled (via `toggle_history` command), the bot:
+   - Sanitizes messages by replacing image inputs with text placeholders for efficient storage
+   - Maintains conversation context by storing both user messages and assistant responses
+   - Automatically summarizes conversations when history reaches 20 messages, preserving context while optimizing storage
+   - Stores summaries in the embedding service for future context retrieval
+4. **AI Communication**: When a user sends a message, the bot constructs a prompt including relevant memories, summaries, and conversation history, then requests a response from OpenAI's API
+5. **Response Handling**: The bot processes the API response (text, emojis, reactions) and replies accordingly
+6. **Memory Storage**: Messages and summaries are embedded and stored for relevant context retrieval in future conversations
 
 ## Testing
 

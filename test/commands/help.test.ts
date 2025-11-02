@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { Context, Telegraf } from 'telegraf'
 import { help } from '../../src/commands/help'
 import type { UserService } from '../../src/service/UserService'
+import { AdminAuthService } from '../../src/service/AdminAuthService'
+
+// Mock AdminAuthService
+vi.mock('../../src/service/AdminAuthService', () => ({
+  AdminAuthService: vi.fn()
+}))
 
 describe('help command', () => {
   let bot: Telegraf<Context<any>>
@@ -37,7 +43,9 @@ describe('help command', () => {
       getUserBalance: vi.fn()
     } as any
 
-    env = {}
+    env = {
+      BOT_TOKEN: 'test-token'
+    }
 
     help(bot, sessionController, userService, env)
   })
@@ -57,13 +65,10 @@ describe('help command', () => {
       expect(ctx.telegram!.sendMessage).toHaveBeenCalledWith(
         456,
         expect.stringContaining('Available Commands'),
-        { parse_mode: 'Markdown' }
+        expect.objectContaining({ parse_mode: 'Markdown' })
       )
-      expect(ctx.telegram!.sendMessage).toHaveBeenCalledWith(
-        456,
-        expect.stringContaining('100 coins'),
-        { parse_mode: 'Markdown' }
-      )
+      const messageCall = vi.mocked(ctx.telegram!.sendMessage).mock.calls[0]
+      expect(messageCall[1]).toContain('100 coins')
     })
 
     it('should send help message without balance info when userService is not available', async () => {
@@ -103,7 +108,7 @@ describe('help command', () => {
       expect(ctx.telegram!.sendMessage).toHaveBeenCalledWith(
         456,
         expect.stringContaining('Available Commands'),
-        { parse_mode: 'Markdown' }
+        expect.objectContaining({ parse_mode: 'Markdown' })
       )
     })
 
@@ -154,6 +159,160 @@ describe('help command', () => {
       expect(sendMessageCall).toContain('/balance')
       expect(sendMessageCall).toContain('/image')
       expect(sendMessageCall).toContain('/buy')
+    })
+
+    describe('admin button functionality', () => {
+      it('should show admin button when user is admin in group chat', async () => {
+        const groupCtx = {
+          ...ctx,
+          chat: { id: 456, type: 'group' } as any
+        }
+        const mockAdminAuthService = {
+          verifyAdminStatus: vi.fn().mockResolvedValue(true)
+        }
+        vi.mocked(AdminAuthService).mockImplementation(() => mockAdminAuthService as any)
+
+        const handler = (bot as any).helpHandler
+        await handler(groupCtx as Context)
+
+        expect(AdminAuthService).toHaveBeenCalledWith(env, 'test-token')
+        expect(mockAdminAuthService.verifyAdminStatus).toHaveBeenCalledWith(456, 123)
+        const sendMessageCall = vi.mocked(groupCtx.telegram!.sendMessage).mock.calls[0]
+        expect(sendMessageCall[2]).toHaveProperty('reply_markup')
+        const replyMarkup = sendMessageCall[2]?.reply_markup as any
+        expect(replyMarkup).toHaveProperty('inline_keyboard')
+      })
+
+      it('should show admin button when user is admin in supergroup chat', async () => {
+        const supergroupCtx = {
+          ...ctx,
+          chat: { id: 456, type: 'supergroup' } as any
+        }
+        const mockAdminAuthService = {
+          verifyAdminStatus: vi.fn().mockResolvedValue(true)
+        }
+        vi.mocked(AdminAuthService).mockImplementation(() => mockAdminAuthService as any)
+
+        const handler = (bot as any).helpHandler
+        await handler(supergroupCtx as Context)
+
+        expect(mockAdminAuthService.verifyAdminStatus).toHaveBeenCalledWith(456, 123)
+        const sendMessageCall = vi.mocked(supergroupCtx.telegram!.sendMessage).mock.calls[0]
+        expect(sendMessageCall[2]).toHaveProperty('reply_markup')
+      })
+
+      it('should not show admin button when user is not admin', async () => {
+        const groupCtx = {
+          ...ctx,
+          chat: { id: 456, type: 'group' } as any
+        }
+        const mockAdminAuthService = {
+          verifyAdminStatus: vi.fn().mockResolvedValue(false)
+        }
+        vi.mocked(AdminAuthService).mockImplementation(() => mockAdminAuthService as any)
+
+        const handler = (bot as any).helpHandler
+        await handler(groupCtx as Context)
+
+        expect(mockAdminAuthService.verifyAdminStatus).toHaveBeenCalledWith(456, 123)
+        const sendMessageCall = vi.mocked(groupCtx.telegram!.sendMessage).mock.calls[0]
+        const replyMarkup = sendMessageCall[2]?.reply_markup
+        expect(replyMarkup).toBeUndefined()
+      })
+
+      it('should not show admin button in private chat', async () => {
+        const privateCtx = {
+          ...ctx,
+          chat: { id: 456, type: 'private' } as any
+        }
+
+        const handler = (bot as any).helpHandler
+        await handler(privateCtx as Context)
+
+        expect(AdminAuthService).not.toHaveBeenCalled()
+        const sendMessageCall = vi.mocked(privateCtx.telegram!.sendMessage).mock.calls[0]
+        const replyMarkup = sendMessageCall[2]?.reply_markup
+        expect(replyMarkup).toBeUndefined()
+      })
+
+      it('should not show admin button when env is not provided', async () => {
+        const testBot = {
+          command: vi.fn((command, handler) => {
+            if (command === 'help') {
+              ;(testBot as any).helpHandler = handler
+            }
+          })
+        } as any
+
+        const groupCtx = {
+          ...ctx,
+          chat: { id: 456, type: 'group' } as any
+        }
+
+        await help(testBot, sessionController, userService, undefined)
+        const handler = (testBot as any).helpHandler
+        await handler(groupCtx as Context)
+
+        expect(AdminAuthService).not.toHaveBeenCalled()
+      })
+
+      it('should not show admin button when ctx.from is undefined', async () => {
+        const groupCtx = {
+          ...ctx,
+          chat: { id: 456, type: 'group' } as any,
+          from: undefined
+        }
+        const mockAdminAuthService = {
+          verifyAdminStatus: vi.fn().mockResolvedValue(true)
+        }
+        vi.mocked(AdminAuthService).mockImplementation(() => mockAdminAuthService as any)
+
+        const handler = (bot as any).helpHandler
+        await handler(groupCtx as Context)
+
+        expect(AdminAuthService).not.toHaveBeenCalled()
+      })
+
+      it('should handle admin status check errors gracefully', async () => {
+        const groupCtx = {
+          ...ctx,
+          chat: { id: 456, type: 'group' } as any
+        }
+        const mockAdminAuthService = {
+          verifyAdminStatus: vi.fn().mockRejectedValue(new Error('API error'))
+        }
+        vi.mocked(AdminAuthService).mockImplementation(() => mockAdminAuthService as any)
+
+        const handler = (bot as any).helpHandler
+        await handler(groupCtx as Context)
+
+        expect(console.error).toHaveBeenCalledWith(
+          'Error checking admin status:',
+          expect.any(Error)
+        )
+        expect(ctx.telegram!.sendMessage).toHaveBeenCalled()
+      })
+
+      it('should include correct worker URL in admin button', async () => {
+        const groupCtx = {
+          ...ctx,
+          chat: { id: 456, type: 'group' } as any
+        }
+        const mockAdminAuthService = {
+          verifyAdminStatus: vi.fn().mockResolvedValue(true)
+        }
+        vi.mocked(AdminAuthService).mockImplementation(() => mockAdminAuthService as any)
+
+        const handler = (bot as any).helpHandler
+        await handler(groupCtx as Context)
+
+        const sendMessageCall = vi.mocked(groupCtx.telegram!.sendMessage).mock.calls[0]
+        const replyMarkup = sendMessageCall[2]?.reply_markup as any
+        expect(replyMarkup).toBeDefined()
+        const keyboard = replyMarkup.inline_keyboard[0][0]
+        expect(keyboard.web_app.url).toContain('my-first-worker.damir-cy.workers.dev')
+        expect(keyboard.web_app.url).toContain('/admin')
+      })
     })
   })
 })
