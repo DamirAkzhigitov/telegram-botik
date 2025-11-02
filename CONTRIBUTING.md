@@ -41,6 +41,50 @@ Thank you for your interest in contributing to this project! This document provi
 
 ### Commits
 
+We use [Conventional Commits](https://www.conventionalcommits.org/) format for commit messages to enable automatic versioning and changelog generation.
+
+**Commit Message Format:**
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+**Types:**
+
+- `feat`: A new feature (triggers minor version bump)
+- `fix`: A bug fix (triggers patch version bump)
+- `docs`: Documentation only changes
+- `style`: Code style changes (formatting, missing semicolons, etc.)
+- `refactor`: Code refactoring without changing functionality
+- `perf`: Performance improvements
+- `test`: Adding or updating tests
+- `chore`: Maintenance tasks, dependency updates, etc.
+- `ci`: CI/CD configuration changes
+- `build`: Build system or external dependencies changes
+
+**Breaking Changes:**
+To trigger a major version bump, include `BREAKING CHANGE:` in the footer:
+
+```
+feat(api): add new authentication method
+
+BREAKING CHANGE: Old auth tokens are no longer supported
+```
+
+**Examples:**
+
+- `feat: add history management system`
+- `fix(bot): resolve memory leak in session handling`
+- `feat(commands): add new sticker command`
+- `fix(api): handle edge case in message parsing (#123)`
+- `chore: update dependencies`
+
+**Guidelines:**
+
 - Use clear, imperative commit messages
 - Reference issues when applicable: `fix: resolve memory leak (#123)`
 - Keep commits focused and atomic
