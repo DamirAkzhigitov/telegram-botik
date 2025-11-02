@@ -14,7 +14,9 @@ import {
 } from './messageBuilder'
 import {
   sanitizeHistoryMessages,
-  buildAssistantHistoryMessages
+  buildAssistantHistoryMessages,
+  createConversationSummary,
+  createSummaryMessage
 } from './history'
 import { collectImageInputs } from './media'
 import { ensureSessionReady } from './sessionGuards'
@@ -42,6 +44,7 @@ interface MessageHandlerDeps {
   sessionController: SessionController
   userService: UserService
   telegramFileClient: AxiosInstance
+  openai: OpenAI
 }
 
 export const handleIncomingMessage = async (
@@ -138,20 +141,12 @@ export const handleIncomingMessage = async (
     newMessage: loggedMessage
   })
 
-  if (message.length > 10 && sessionData.toggle_history) {
-    await deps.embeddingService.saveMessage(
-      chatId,
-      'user',
-      `${username}: ${message}`
-    )
-  }
-
   if (!shouldReply) return
 
   let relativeMessage: (RecordMetadata | undefined)[] = []
 
   if (sessionData.toggle_history) {
-    relativeMessage = await deps.embeddingService.fetchRelevantMessages(
+    relativeMessage = await deps.embeddingService.fetchRelevantSummaries(
       chatId,
       message
     )
@@ -239,9 +234,37 @@ export const handleIncomingMessage = async (
 
   if (sessionData.toggle_history) {
     const sanitizedForStorage = sanitizeHistoryMessages(messages)
-    await deps.sessionController.updateSession(chatId, {
-      userMessages: sanitizedForStorage.slice(-20)
-    })
+
+    if (sanitizedForStorage.length >= 20) {
+      const messagesToSummarize = sanitizedForStorage.slice(-20)
+
+      try {
+        const summaryText = await createConversationSummary(
+          messagesToSummarize,
+          deps.openai,
+          sessionData.model
+        )
+
+        await deps.embeddingService.saveSummary(chatId, summaryText)
+
+        const summaryMessage = createSummaryMessage(summaryText)
+        const remainingMessages = sanitizedForStorage.slice(0, -20)
+        const newHistory = [...remainingMessages, ...summaryMessage]
+
+        await deps.sessionController.updateSession(chatId, {
+          userMessages: newHistory
+        })
+      } catch (error) {
+        console.error('Error creating summary:', error)
+        await deps.sessionController.updateSession(chatId, {
+          userMessages: sanitizedForStorage.slice(-20)
+        })
+      }
+    } else {
+      await deps.sessionController.updateSession(chatId, {
+        userMessages: sanitizedForStorage
+      })
+    }
   }
 
   await ctx.telegram.sendChatAction(

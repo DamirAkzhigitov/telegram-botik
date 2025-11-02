@@ -20,6 +20,10 @@ vi.mock('../../src/bot/history', () => ({
       role: 'assistant',
       content: [{ type: 'output_text', text: 'A1' }]
     }
+  ]),
+  createConversationSummary: vi.fn().mockResolvedValue('Test summary'),
+  createSummaryMessage: vi.fn(() => [
+    { role: 'assistant', content: [{ type: 'output_text', text: 'ok' }] }
   ])
 }))
 
@@ -95,8 +99,12 @@ describe('messageHandler', () => {
 
     embeddingService = {
       saveMessage: vi.fn().mockResolvedValue(undefined),
+      saveSummary: vi.fn().mockResolvedValue(undefined),
       fetchRelevantMessages: vi.fn().mockResolvedValue([
         { id: '1', content: 'old msg', score: 0.9 }
+      ]),
+      fetchRelevantSummaries: vi.fn().mockResolvedValue([
+        { id: '1', content: 'summary', score: 0.9 }
       ])
     }
 
@@ -109,7 +117,8 @@ describe('messageHandler', () => {
         promptNotSet: false,
         stickerNotSet: false,
         toggle_history: true,
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-mini-2025-08-07',
+        memories: [],
         chat_settings: {
           reply_only_in_thread: false,
           send_message_option: {}
@@ -130,6 +139,25 @@ describe('messageHandler', () => {
     telegramFileClient = {} as any
   })
 
+  const mockOpenAI = {
+    responses: {
+      create: vi.fn().mockResolvedValue({
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            content: [
+              {
+                type: 'output_text',
+                text: 'Test summary'
+              }
+            ]
+          }
+        ]
+      })
+    }
+  } as any
+
   describe('happy path with history enabled', () => {
     it('builds message, calls API, stores memory, updates session, dispatches', async () => {
       await handleIncomingMessage(ctx as Context, {
@@ -138,7 +166,8 @@ describe('messageHandler', () => {
         embeddingService,
         sessionController,
         userService,
-        telegramFileClient
+        telegramFileClient,
+        openai: mockOpenAI
       })
 
       expect(userService.registerOrGetUser).toHaveBeenCalledWith({
@@ -156,14 +185,13 @@ describe('messageHandler', () => {
       expect(createLoggedMessage).toHaveBeenCalled()
 
       // history related
-      expect(embeddingService.saveMessage).toHaveBeenCalled()
-      expect(embeddingService.fetchRelevantMessages).toHaveBeenCalledWith(777, 'hello bot message')
+      expect(embeddingService.fetchRelevantSummaries).toHaveBeenCalledWith(777, 'hello bot message')
       expect(sessionController.getFormattedMemories).toHaveBeenCalled()
 
       // API called with options
       expect(responseApi).toHaveBeenCalled()
       const [, options] = responseApi.mock.calls[0]
-      expect(options).toEqual({ hasEnoughCoins: true, model: 'gpt-4o-mini', prompt: '' })
+      expect(options).toEqual({ hasEnoughCoins: true, model: 'gpt-5-mini-2025-08-07', prompt: '' })
 
       // After API
       expect(extractMemoryItems).toHaveBeenCalled()
@@ -191,7 +219,8 @@ describe('messageHandler', () => {
         embeddingService,
         sessionController,
         userService,
-        telegramFileClient
+        telegramFileClient,
+        openai: mockOpenAI
       })
 
       expect(userService.registerOrGetUser).not.toHaveBeenCalled()
@@ -206,7 +235,8 @@ describe('messageHandler', () => {
         embeddingService,
         sessionController,
         userService,
-        telegramFileClient
+        telegramFileClient,
+        openai: mockOpenAI
       })
 
       expect(userService.registerOrGetUser).toHaveBeenCalled()
@@ -222,6 +252,8 @@ describe('messageHandler', () => {
         promptNotSet: false,
         stickerNotSet: false,
         toggle_history: false,
+        model: 'gpt-5-mini-2025-08-07',
+        memories: [],
         chat_settings: {
           reply_only_in_thread: true,
           thread_id: 999,
@@ -236,7 +268,8 @@ describe('messageHandler', () => {
         embeddingService,
         sessionController,
         userService,
-        telegramFileClient
+        telegramFileClient,
+        openai: mockOpenAI
       })
 
       expect(responseApi).not.toHaveBeenCalled()
@@ -254,7 +287,8 @@ describe('messageHandler', () => {
         embeddingService,
         sessionController,
         userService,
-        telegramFileClient
+        telegramFileClient,
+        openai: mockOpenAI
       })
 
       expect(dispatchResponsesSequentially).not.toHaveBeenCalled()
