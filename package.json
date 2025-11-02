@@ -90,7 +90,7 @@
       "prettier --write"
     ],
     "*.{json,md,yml,yaml}": [
-      "prettier --check"
+      "prettier --write"
     ]
   }
 }
