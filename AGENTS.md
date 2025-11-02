@@ -6,13 +6,45 @@ Core worker logic stays in `src/`, with `src/index.ts` dispatching requests and 
 
 ## Build, Test, and Development Commands
 
+### Installation
+
 - `pnpm install` – install dependencies in line with the lockfile.
+
+### Development
+
 - `pnpm dev` – run the worker with Wrangler hot reload.
 - `pnpm dev:local` – execute `src/local-test.ts` with `.env.local` to mimic Telegram locally.
-- `pnpm dev:full` – start the full ngrok + Wrangler loop for webhook testing.
+- `pnpm serve` – start ngrok tunnel for local development on port 8787.
+
+### Testing
+
 - `pnpm test` – run Vitest (add `--watch` when iterating).
+- `pnpm test:coverage` – run Vitest with coverage report.
+
+### Code Quality
+
 - `pnpm format` – apply Prettier formatting before commits.
-- `pnpm deploy` / `pnpm deploy:prod` – push preview or production builds via Wrangler.
+- `pnpm format:check` – check if files are formatted correctly without modifying them.
+- `pnpm typecheck` – run TypeScript type checking without emitting files.
+- `pnpm lint` – run ESLint to check code quality.
+- `pnpm lint:fix` – run ESLint and automatically fix issues.
+- `pnpm validate` – run format, typecheck, lint, and test in sequence.
+
+### Cloudflare Worker
+
+- `pnpm deploy` – deploy to Cloudflare Workers (preview).
+- `pnpm cf-typegen` – generate TypeScript types from Wrangler configuration.
+
+### Webhook Management
+
+- `pnpm webhook:set-dev` – set webhook URL for development environment.
+- `pnpm webhook:set-prod` – set webhook URL for production environment.
+- `pnpm webhook:delete` – delete the current webhook.
+- `pnpm webhook:info` – get information about the current webhook.
+
+### Git Hooks
+
+- `pnpm prepare` – set up Husky git hooks (runs automatically after install).
 
 ## Coding Style & Naming Conventions
 

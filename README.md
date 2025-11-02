@@ -36,8 +36,8 @@ This project is a Telegram bot that leverages OpenAI's GPT-4 API to simulate eng
 1. **Clone the Repository:**
 
    ```bash
-   git clone https://github.com/yourusername/my-first-worker.git
-   cd my-first-worker
+   git clone https://github.com/DamirAkzhigitov/telegram-botik.git
+   cd telegram-botik
    ```
 
 2. **Install Dependencies:**

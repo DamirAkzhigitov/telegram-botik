@@ -90,7 +90,7 @@ describe('messageHandler', () => {
       } as any
     }
 
-    env = { BOT_TOKEN: 'token' } as Env
+    env = { BOT_TOKEN: 'token' }
 
     responseApi = vi.fn().mockResolvedValue([
       { type: 'memory', content: 'remember this' },
@@ -293,6 +293,341 @@ describe('messageHandler', () => {
 
       expect(dispatchResponsesSequentially).not.toHaveBeenCalled()
       expect(sessionController.updateSession).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('edge cases and missing branches', () => {
+    it('should return early when ctx.from is undefined after sessionReady', async () => {
+      const ctxWithoutFrom = { ...ctx, from: undefined } as any
+      ensureSessionReady.mockResolvedValueOnce(true)
+
+      await handleIncomingMessage(ctxWithoutFrom as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(responseApi).not.toHaveBeenCalled()
+    })
+
+    it('should not fetch summaries when toggle_history is false', async () => {
+      sessionController.getSession.mockResolvedValueOnce({
+        userMessages: [],
+        stickersPacks: [],
+        prompt: '',
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        toggle_history: false,
+        model: 'gpt-5-mini-2025-08-07',
+        memories: [],
+        chat_settings: {
+          reply_only_in_thread: false,
+          send_message_option: {}
+        }
+      } as SessionData)
+
+      await handleIncomingMessage(ctx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(embeddingService.fetchRelevantSummaries).not.toHaveBeenCalled()
+      expect(sessionController.getFormattedMemories).not.toHaveBeenCalled()
+    })
+
+    it('should handle caption when message has caption', async () => {
+      const ctxWithCaption = {
+        ...ctx,
+        message: {
+          ...(ctx.message as any),
+          caption: 'image caption'
+        }
+      } as any
+
+      await handleIncomingMessage(ctxWithCaption as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(composeUserContent).toHaveBeenCalledWith({
+        username: 'alice',
+        trimmedMessage: 'image caption',
+        imageInputs: []
+      })
+    })
+
+    it('should handle message with both text and caption', async () => {
+      const ctxWithBoth = {
+        ...ctx,
+        message: {
+          ...(ctx.message as any),
+          text: 'hello',
+          caption: 'image caption'
+        }
+      } as any
+
+      await handleIncomingMessage(ctxWithBoth as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(composeUserContent).toHaveBeenCalledWith({
+        username: 'alice',
+        trimmedMessage: 'image caption',
+        imageInputs: []
+      })
+    })
+
+    it('should create summary when messages length >= 20', async () => {
+      const createConversationSummary = (await import('../../src/bot/history')).createConversationSummary as unknown as ReturnType<typeof vi.fn>
+      const saveSummary = embeddingService.saveSummary
+
+      const manyMessages = Array(25).fill({
+        role: 'user',
+        content: [{ type: 'input_text', text: 'msg' }]
+      })
+
+      sanitizeHistoryMessages.mockReturnValueOnce(manyMessages)
+
+      sessionController.getSession.mockResolvedValueOnce({
+        userMessages: manyMessages.slice(0, 5),
+        stickersPacks: [],
+        prompt: '',
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        toggle_history: true,
+        model: 'gpt-5-mini-2025-08-07',
+        memories: [],
+        chat_settings: {
+          reply_only_in_thread: false,
+          send_message_option: {}
+        }
+      } as SessionData)
+
+      await handleIncomingMessage(ctx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(createConversationSummary).toHaveBeenCalled()
+      expect(saveSummary).toHaveBeenCalled()
+      expect(sessionController.updateSession).toHaveBeenCalled()
+    })
+
+    it('should handle summary creation error gracefully', async () => {
+      const createConversationSummary = (await import('../../src/bot/history')).createConversationSummary as unknown as ReturnType<typeof vi.fn>
+
+      const manyMessages = Array(25).fill({
+        role: 'user',
+        content: [{ type: 'input_text', text: 'msg' }]
+      })
+
+      sanitizeHistoryMessages.mockReturnValueOnce(manyMessages)
+      createConversationSummary.mockRejectedValueOnce(new Error('Summary failed'))
+
+      sessionController.getSession.mockResolvedValueOnce({
+        userMessages: manyMessages.slice(0, 5),
+        stickersPacks: [],
+        prompt: '',
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        toggle_history: true,
+        model: 'gpt-5-mini-2025-08-07',
+        memories: [],
+        chat_settings: {
+          reply_only_in_thread: false,
+          send_message_option: {}
+        }
+      } as SessionData)
+
+      await handleIncomingMessage(ctx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(sessionController.updateSession).toHaveBeenCalledWith(777, {
+        userMessages: expect.arrayContaining([])
+      })
+    })
+
+    it('should not create summary when messages length < 20', async () => {
+      const createConversationSummary = (await import('../../src/bot/history')).createConversationSummary as unknown as ReturnType<typeof vi.fn>
+
+      const fewMessages = Array(15).fill({
+        role: 'user',
+        content: [{ type: 'input_text', text: 'msg' }]
+      })
+
+      sanitizeHistoryMessages.mockReturnValue(fewMessages)
+
+      await handleIncomingMessage(ctx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(createConversationSummary).not.toHaveBeenCalled()
+      // The updateSession will be called with messages including the new one and assistant response
+      expect(sessionController.updateSession).toHaveBeenCalled()
+      const updateCall = sessionController.updateSession.mock.calls.find(
+        (call: any[]) => call[0] === 777 && call[1].userMessages
+      )
+      expect(updateCall).toBeDefined()
+      expect(updateCall[1].userMessages.length).toBeGreaterThanOrEqual(15)
+    })
+
+    it('should handle relativeMessage with undefined items', async () => {
+      embeddingService.fetchRelevantSummaries.mockResolvedValueOnce([
+        { id: '1', content: 'summary', score: 0.9 },
+        undefined,
+        { id: '2', content: 'summary2', score: 0.8 }
+      ])
+
+      await handleIncomingMessage(ctx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(responseApi).toHaveBeenCalled()
+      const [messages] = responseApi.mock.calls[0]
+      // Should handle undefined items in relativeMessage
+      expect(messages.length).toBeGreaterThan(0)
+    })
+
+    it('should handle relativeMessage with missing content', async () => {
+      embeddingService.fetchRelevantSummaries.mockResolvedValueOnce([
+        { id: '1', score: 0.9 } // missing content
+      ])
+
+      await handleIncomingMessage(ctx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(responseApi).toHaveBeenCalled()
+    })
+
+    it('should handle user registration error gracefully', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      userService.registerOrGetUser.mockRejectedValueOnce(new Error('DB error'))
+
+      await handleIncomingMessage(ctx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Error registering user:', expect.any(Error))
+      // Should continue processing despite registration error
+      expect(sessionController.getSession).toHaveBeenCalled()
+      consoleErrorSpy.mockRestore()
+    })
+
+    it('should handle sessionReady returning false', async () => {
+      ensureSessionReady.mockResolvedValueOnce(false)
+
+      await handleIncomingMessage(ctx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(responseApi).not.toHaveBeenCalled()
+      expect(dispatchResponsesSequentially).not.toHaveBeenCalled()
+    })
+
+    it('should handle reply_only_in_thread when message is in thread', async () => {
+      sessionController.getSession.mockResolvedValueOnce({
+        userMessages: [],
+        stickersPacks: [],
+        prompt: '',
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        toggle_history: false,
+        model: 'gpt-5-mini-2025-08-07',
+        memories: [],
+        chat_settings: {
+          reply_only_in_thread: true,
+          thread_id: 999,
+          send_message_option: {}
+        }
+      } as SessionData)
+
+      const ctxInThread = {
+        ...ctx,
+        message: {
+          ...(ctx.message as any),
+          message_thread_id: 999
+        }
+      }
+
+      await handleIncomingMessage(ctxInThread as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(responseApi).toHaveBeenCalled()
+      expect(dispatchResponsesSequentially).toHaveBeenCalled()
     })
   })
 })
