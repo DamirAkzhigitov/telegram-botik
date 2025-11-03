@@ -13,12 +13,12 @@ import {
   filterResponseMessages
 } from './messageBuilder'
 import {
-  sanitizeHistoryMessages,
   buildAssistantHistoryMessages,
   createConversationSummary,
-  createSummaryMessage
+  createSummaryMessage,
+  sanitizeHistoryMessages
 } from './history'
-import { collectImageInputs } from './media'
+import { collectImageInputs, collectStickerDescription } from './media'
 import { ensureSessionReady } from './sessionGuards'
 import { dispatchResponsesSequentially } from './responseDispatcher'
 import { delay } from '../utils'
@@ -116,13 +116,26 @@ export const handleIncomingMessage = async (
 
   const imageInputs = await collectImageInputs(ctx, mediaDeps)
 
+  let stickerDescription: string | null = null
+  let stickerEmoji: string | null = null
+  if (ctx.message && 'sticker' in ctx.message && ctx.message.sticker) {
+    const sticker = ctx.message.sticker
+    if (sticker.emoji && typeof sticker.emoji === 'string') {
+      stickerEmoji = sticker.emoji
+    }
+    stickerDescription = await collectStickerDescription(ctx, mediaDeps, {
+      openai: deps.openai
+    })
+  }
+
   const caption =
     ctx.message &&
     'caption' in ctx.message &&
     typeof ctx.message.caption === 'string'
       ? ctx.message.caption
       : ''
-  const message = `${caption || userMessage}`
+
+  const message = stickerDescription || stickerEmoji || caption || userMessage
   const trimmedMessage = message.trim()
 
   const content = composeUserContent({
@@ -148,7 +161,7 @@ export const handleIncomingMessage = async (
   if (sessionData.toggle_history) {
     relativeMessage = await deps.embeddingService.fetchRelevantSummaries(
       chatId,
-      message
+      trimmedMessage
     )
   }
 

@@ -4,5 +4,8 @@
   "semi": false,
   "useTabs": false,
   "tabWidth": 2,
-  "trailingComma": "none"
+  "trailingComma": "none",
+  "endOfLine": "lf",
+  "insertPragma": false,
+  "requirePragma": false
 }

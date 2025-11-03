@@ -3,6 +3,10 @@ import OpenAI from 'openai'
 import type { Context } from 'telegraf'
 import { TELEGRAM_API_BASE_URL } from './constants'
 
+interface StickerDescriptionDeps {
+  openai: OpenAI
+}
+
 const guessMimeFromPath = (filePath: string): string => {
   const extension = filePath.split('.').pop()?.toLowerCase()
   switch (extension) {
@@ -99,7 +103,104 @@ export const collectImageInputs = async (
         })
       }
     }
+  } else if (message && 'sticker' in message && message.sticker) {
+    const sticker = message.sticker
+    const fileId = sticker.file_id
+    if (fileId) {
+      // Stickers are typically webp format
+      const imageUrl = await downloadTelegramImage(deps, fileId, 'image/webp')
+      if (imageUrl) {
+        imageInputs.push({
+          type: 'input_image',
+          image_url: imageUrl,
+          detail: 'auto'
+        })
+      }
+    }
   }
 
   return imageInputs
+}
+
+/**
+ * Converts a sticker image to a text description using OpenAI Vision API
+ */
+export const getStickerDescription = async (
+  imageUrl: string,
+  deps: StickerDescriptionDeps
+): Promise<string | null> => {
+  try {
+    const response = await deps.openai.responses.create({
+      model: 'gpt-5-mini-2025-08-07',
+      input: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: 'Опиши этот стикер кратко на русском языке. Укажи что именно изображено, какие эмоции или действия передает стикер. Ответ должен быть кратким (1-2 предложения).'
+            },
+            {
+              type: 'input_image',
+              image_url: imageUrl,
+              detail: 'auto'
+            }
+          ]
+        }
+      ],
+      store: false
+    })
+
+    if (response.status === 'incomplete') {
+      console.error(
+        'Sticker description incomplete:',
+        response.incomplete_details?.reason
+      )
+      return null
+    }
+
+    const message = response.output.find((item) => item.type === 'message')
+    if (message) {
+      const outputText = message.content.find(
+        (item) => item.type === 'output_text'
+      )
+      if (outputText?.text) {
+        return outputText.text.trim()
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.error('Failed to get sticker description:', error)
+    return null
+  }
+}
+
+/**
+ * Extracts sticker text description if message contains a sticker
+ */
+export const collectStickerDescription = async (
+  ctx: Context,
+  mediaDeps: MediaDependencies,
+  stickerDeps: StickerDescriptionDeps
+): Promise<string | null> => {
+  const message = ctx.message
+
+  if (message && 'sticker' in message && message.sticker) {
+    const sticker = message.sticker
+    const fileId = sticker.file_id
+    if (fileId) {
+      const imageUrl = await downloadTelegramImage(
+        mediaDeps,
+        fileId,
+        'image/webp'
+      )
+      if (imageUrl) {
+        const description = await getStickerDescription(imageUrl, stickerDeps)
+        return description
+      }
+    }
+  }
+
+  return null
 }
