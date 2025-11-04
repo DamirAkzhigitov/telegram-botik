@@ -155,6 +155,3 @@ describe('clearMessage command', () => {
   })
 })
 
-
-
-

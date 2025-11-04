@@ -157,6 +157,3 @@ describe('clearMemories command', () => {
   })
 })
 
-
-
-

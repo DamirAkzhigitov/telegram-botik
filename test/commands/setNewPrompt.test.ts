@@ -149,6 +149,3 @@ describe('setNewPrompt command', () => {
   })
 })
 
-
-
-

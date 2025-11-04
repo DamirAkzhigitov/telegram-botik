@@ -186,6 +186,3 @@ describe('useHistory command', () => {
   })
 })
 
-
-
-

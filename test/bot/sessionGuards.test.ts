@@ -227,6 +227,3 @@ describe('ensureSessionReady', () => {
 })
 
 
-
-
-

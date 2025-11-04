@@ -5,7 +5,6 @@
   "useTabs": false,
   "tabWidth": 2,
   "trailingComma": "none",
-  "endOfLine": "lf",
   "insertPragma": false,
   "requirePragma": false
 }

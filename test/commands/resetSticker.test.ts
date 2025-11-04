@@ -151,6 +151,3 @@ describe('resetSticker command', () => {
   })
 })
 
-
-
-

@@ -148,3 +148,4 @@ describe('addSticker command', () => {
     })
   })
 })
+
