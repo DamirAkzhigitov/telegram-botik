@@ -1,10 +1,11 @@
 import type { QueuedMessage, QueuedMessageItem } from '../types'
 
-const DEBOUNCE_TIMEOUT_MS = 5000 // 5 seconds
+export const DEBOUNCE_TIMEOUT_MS = 10000 // 10 seconds
 
 interface MessageBuffer {
   messages: QueuedMessageItem[]
-  firstMessageTimestamp: number
+  lastMessageTimestamp: number
+  scheduledFlushTime: number | null // timestamp when flush is scheduled
 }
 
 export class MessageBufferService {
@@ -18,7 +19,7 @@ export class MessageBufferService {
     return `buffer_${chatId}`
   }
 
-  private async getBuffer(chatId: number): Promise<MessageBuffer | null> {
+  async getBuffer(chatId: number): Promise<MessageBuffer | null> {
     try {
       const data = await this.env.CHAT_SESSIONS_STORAGE.get(
         this.getBufferKey(chatId)
@@ -45,7 +46,7 @@ export class MessageBufferService {
     }
   }
 
-  private async clearBuffer(chatId: number): Promise<void> {
+  async clearBuffer(chatId: number): Promise<void> {
     try {
       await this.env.CHAT_SESSIONS_STORAGE.delete(this.getBufferKey(chatId))
     } catch (error) {
@@ -53,37 +54,76 @@ export class MessageBufferService {
     }
   }
 
-  private async enqueueMessages(
+  async enqueueMessages(
     chatId: number,
-    messages: QueuedMessageItem[]
+    messages: QueuedMessageItem[],
+    delaySeconds?: number
   ): Promise<void> {
     const queuedMessage: QueuedMessage = {
       chatId,
       messages
     }
     try {
-      await this.env.MESSAGE_QUEUE.send(queuedMessage)
-      console.log(`Enqueued ${messages.length} messages for chat ${chatId}`)
+      const options = delaySeconds ? { delaySeconds } : undefined
+      await this.env.MESSAGE_QUEUE.send(queuedMessage, options)
+      console.log(
+        `Enqueued ${messages.length} messages for chat ${chatId}${
+          delaySeconds ? ` (delayed by ${delaySeconds}s)` : ''
+        }`
+      )
     } catch (error) {
       console.error('Error enqueuing messages:', error)
       throw error
     }
   }
 
-  private shouldFlushBuffer(
-    buffer: MessageBuffer,
-    batchLimit: number
-  ): boolean {
-    const now = Date.now()
-    const timeSinceFirstMessage = now - buffer.firstMessageTimestamp
-
-    // Flush if timeout expired
-    if (timeSinceFirstMessage >= DEBOUNCE_TIMEOUT_MS) {
-      return true
+  private async scheduleFlush(chatId: number): Promise<void> {
+    const buffer = await this.getBuffer(chatId)
+    if (!buffer || buffer.messages.length === 0) {
+      return
     }
 
-    // Flush if batch limit reached
-    return buffer.messages.length >= batchLimit
+    const now = Date.now()
+    const timeSinceLastMessage = now - buffer.lastMessageTimestamp
+
+    // If 10 seconds have already passed, flush immediately
+    if (timeSinceLastMessage >= DEBOUNCE_TIMEOUT_MS) {
+      await this.enqueueMessages(chatId, buffer.messages)
+      await this.clearBuffer(chatId)
+      return
+    }
+
+    // Note: We don't check for existing scheduled flushes here because:
+    // 1. We can't cancel queued messages in Cloudflare Queues
+    // 2. When a new message arrives, we reset scheduledFlushTime to null
+    // 3. Old flush triggers will be ignored when they arrive if new messages came in
+    // So we always schedule a new flush when this method is called
+
+    // Calculate remaining time until flush
+    const remainingTime = DEBOUNCE_TIMEOUT_MS - timeSinceLastMessage
+    const delaySeconds = Math.ceil(remainingTime / 1000)
+
+    // Schedule flush with delay - send a flush trigger message (empty messages array)
+    // When it arrives, the queue processor will check if 10 seconds have passed
+    buffer.scheduledFlushTime = now + remainingTime
+    await this.saveBuffer(chatId, buffer)
+
+    // Send a flush trigger message (with empty messages array) that will check and flush
+    const flushTrigger: QueuedMessage = {
+      chatId,
+      messages: [] // Empty array signals this is a flush trigger
+    }
+    try {
+      await this.env.MESSAGE_QUEUE.send(flushTrigger, { delaySeconds })
+      console.log(
+        `Scheduled flush trigger for chat ${chatId} in ${delaySeconds}s`
+      )
+    } catch (error) {
+      console.error('Error scheduling flush trigger:', error)
+      // Clear the scheduled flush time on error
+      buffer.scheduledFlushTime = null
+      await this.saveBuffer(chatId, buffer)
+    }
   }
 
   async bufferMessage(
@@ -96,28 +136,32 @@ export class MessageBufferService {
 
     let buffer: MessageBuffer
     if (existingBuffer) {
-      // Add to existing buffer
+      // Add to existing buffer and update last message timestamp
+      // This resets the debounce timer
       buffer = {
         messages: [...existingBuffer.messages, message],
-        firstMessageTimestamp: existingBuffer.firstMessageTimestamp
+        lastMessageTimestamp: now,
+        scheduledFlushTime: null // Reset scheduled flush since we got a new message
       }
     } else {
       // Create new buffer
       buffer = {
         messages: [message],
-        firstMessageTimestamp: now
+        lastMessageTimestamp: now,
+        scheduledFlushTime: null
       }
     }
 
-    // Check if we should flush
-    if (this.shouldFlushBuffer(buffer, batchLimit)) {
-      // Enqueue all messages and clear buffer
+    // Check if batch limit reached - flush immediately
+    if (buffer.messages.length >= batchLimit) {
       await this.enqueueMessages(chatId, buffer.messages)
       await this.clearBuffer(chatId)
-    } else {
-      // Save updated buffer
-      await this.saveBuffer(chatId, buffer)
+      return
     }
+
+    // Save updated buffer and schedule flush
+    await this.saveBuffer(chatId, buffer)
+    await this.scheduleFlush(chatId)
   }
 
   /**

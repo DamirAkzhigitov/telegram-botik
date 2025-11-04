@@ -2,10 +2,17 @@ import { createBot } from './bot/createBot'
 import { getSessions, getSession, getAdminChats } from './api/sessions'
 import type { Update } from 'telegraf/types'
 import type { QueuedMessage } from './types'
-import { processQueuedMessage } from './bot/processQueuedMessages'
+import {
+  processQueuedMessage,
+  processQueuedMessagesBatch
+} from './bot/processQueuedMessages'
 import { EmbeddingService } from './service/EmbeddingService'
 import { SessionController } from './service/SessionController'
 import { UserService } from './service/UserService'
+import {
+  MessageBufferService,
+  DEBOUNCE_TIMEOUT_MS
+} from './service/MessageBufferService'
 import { getOpenAIClient } from './gpt'
 import { createTelegramFileClient } from './bot/media'
 
@@ -160,25 +167,44 @@ async function processChatMessages(
 
     // Process all messages for this chat sequentially
     for (const { body: queuedMessage, message } of messageEntries) {
-      let batchFailed = false
+      // Handle flush trigger (empty messages array)
+      if (queuedMessage.messages.length === 0) {
+        const bufferService = new MessageBufferService(env)
+        const buffer = await bufferService.getBuffer(chatId)
 
-      // Process each message in the batch sequentially
-      for (const messageItem of queuedMessage.messages) {
-        try {
-          await processQueuedMessage(chatId, messageItem, deps)
-        } catch (error) {
-          console.error(`Error processing message for chat ${chatId}:`, error)
-          // Mark batch as failed and retry the entire message batch
-          batchFailed = true
-          message.retry({ delaySeconds: 5 })
-          // Break out of processing this batch since we're retrying it
-          break
+        if (buffer && buffer.messages.length > 0) {
+          const now = Date.now()
+          const timeSinceLastMessage = now - buffer.lastMessageTimestamp
+
+          // Only flush if debounce timeout has passed since last message
+          if (timeSinceLastMessage >= DEBOUNCE_TIMEOUT_MS) {
+            // Flush the buffer - enqueue messages for processing
+            await bufferService.enqueueMessages(chatId, buffer.messages)
+            await bufferService.clearBuffer(chatId)
+            console.log(
+              `Flushed ${buffer.messages.length} messages for chat ${chatId} after 10s silence`
+            )
+          } else {
+            console.log(
+              `Flush trigger ignored for chat ${chatId} - new messages arrived`
+            )
+          }
         }
+        message.ack()
+        continue
       }
 
-      // Only acknowledge if batch was processed successfully
-      if (!batchFailed) {
+      // Process all messages in the batch as a single LLM request
+      try {
+        await processQueuedMessagesBatch(chatId, queuedMessage.messages, deps)
         message.ack()
+      } catch (error) {
+        console.error(
+          `Error processing message batch for chat ${chatId}:`,
+          error
+        )
+        // Retry the entire message batch
+        message.retry({ delaySeconds: 5 })
       }
     }
   } finally {

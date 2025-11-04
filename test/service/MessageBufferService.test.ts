@@ -42,8 +42,9 @@ describe('MessageBufferService', () => {
       userId: 456
     }
 
-    it('should create new buffer and save when no existing buffer', async () => {
+    it('should create new buffer and schedule flush trigger when no existing buffer', async () => {
       vi.mocked(mockStorage.get).mockResolvedValue(null)
+      vi.mocked(mockQueue.send).mockResolvedValue(undefined)
 
       await bufferService.bufferMessage(chatId, messageItem, 10)
 
@@ -52,10 +53,14 @@ describe('MessageBufferService', () => {
         'buffer_123',
         expect.stringContaining('testuser')
       )
-      expect(mockQueue.send).not.toHaveBeenCalled()
+      // Should schedule a flush trigger (empty messages array with delay)
+      expect(mockQueue.send).toHaveBeenCalledWith(
+        { chatId: 123, messages: [] },
+        expect.objectContaining({ delaySeconds: expect.any(Number) })
+      )
     })
 
-    it('should add to existing buffer when buffer exists and not full', async () => {
+    it('should add to existing buffer and schedule flush trigger when buffer exists and not full', async () => {
       const existingBuffer = {
         messages: [
           {
@@ -66,10 +71,12 @@ describe('MessageBufferService', () => {
             userId: 1
           }
         ],
-        firstMessageTimestamp: Date.now() - 1000
+        lastMessageTimestamp: Date.now() - 1000,
+        scheduledFlushTime: null
       }
 
       vi.mocked(mockStorage.get).mockResolvedValue(JSON.stringify(existingBuffer))
+      vi.mocked(mockQueue.send).mockResolvedValue(undefined)
 
       await bufferService.bufferMessage(chatId, messageItem, 10)
 
@@ -77,10 +84,14 @@ describe('MessageBufferService', () => {
         'buffer_123',
         expect.stringContaining('testuser')
       )
-      expect(mockQueue.send).not.toHaveBeenCalled()
+      // Should schedule a flush trigger (empty messages array with delay)
+      expect(mockQueue.send).toHaveBeenCalledWith(
+        { chatId: 123, messages: [] },
+        expect.objectContaining({ delaySeconds: expect.any(Number) })
+      )
     })
 
-    it('should flush buffer when batch limit is reached', async () => {
+    it('should flush buffer immediately when batch limit is reached', async () => {
       const existingMessages = Array.from({ length: 9 }, (_, i) => ({
         username: `user${i}`,
         content: `message ${i}`,
@@ -91,7 +102,8 @@ describe('MessageBufferService', () => {
 
       const existingBuffer = {
         messages: existingMessages,
-        firstMessageTimestamp: Date.now() - 1000
+        lastMessageTimestamp: Date.now() - 1000,
+        scheduledFlushTime: null
       }
 
       vi.mocked(mockStorage.get).mockResolvedValue(JSON.stringify(existingBuffer))
@@ -99,6 +111,7 @@ describe('MessageBufferService', () => {
 
       await bufferService.bufferMessage(chatId, messageItem, 10)
 
+      // Should flush immediately (no delay) when batch limit reached
       expect(mockQueue.send).toHaveBeenCalledWith({
         chatId: 123,
         messages: expect.arrayContaining([
@@ -109,18 +122,20 @@ describe('MessageBufferService', () => {
       expect(mockStorage.delete).toHaveBeenCalledWith('buffer_123')
     })
 
-    it('should flush buffer when timeout expires', async () => {
+    it('should flush buffer immediately when 10 seconds have passed', async () => {
+      const now = Date.now()
       const existingBuffer = {
         messages: [
           {
             username: 'user1',
             content: 'first message',
-            timestamp: Date.now() - 6000, // 6 seconds ago
+            timestamp: now - 11000, // 11 seconds ago
             messageId: 1,
             userId: 1
           }
         ],
-        firstMessageTimestamp: Date.now() - 6000 // 6 seconds ago (exceeds 5s timeout)
+        lastMessageTimestamp: now - 11000, // 11 seconds ago (exceeds 10s timeout)
+        scheduledFlushTime: null
       }
 
       vi.mocked(mockStorage.get).mockResolvedValue(JSON.stringify(existingBuffer))
@@ -128,6 +143,7 @@ describe('MessageBufferService', () => {
 
       await bufferService.bufferMessage(chatId, messageItem, 10)
 
+      // Should flush immediately (no delay) when 10 seconds have passed
       expect(mockQueue.send).toHaveBeenCalledWith({
         chatId: 123,
         messages: expect.arrayContaining([
@@ -138,6 +154,43 @@ describe('MessageBufferService', () => {
       expect(mockStorage.delete).toHaveBeenCalledWith('buffer_123')
     })
 
+    it('should schedule flush trigger when timeout has not expired', async () => {
+      const now = Date.now()
+      const existingBuffer = {
+        messages: [
+          {
+            username: 'user1',
+            content: 'first message',
+            timestamp: now - 3000, // 3 seconds ago
+            messageId: 1,
+            userId: 1
+          }
+        ],
+        lastMessageTimestamp: now - 3000, // 3 seconds ago (less than 10s timeout)
+        scheduledFlushTime: null
+      }
+
+      vi.mocked(mockStorage.get).mockResolvedValue(JSON.stringify(existingBuffer))
+      vi.mocked(mockQueue.send).mockResolvedValue(undefined)
+
+      await bufferService.bufferMessage(chatId, messageItem, 10)
+
+      // Should schedule a flush trigger with delay (7 seconds remaining)
+      expect(mockQueue.send).toHaveBeenCalledWith(
+        { chatId: 123, messages: [] },
+        expect.objectContaining({ delaySeconds: 7 })
+      )
+      // Should not flush messages immediately
+      expect(mockQueue.send).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({ username: 'user1' })
+          ])
+        }),
+        expect.not.objectContaining({ delaySeconds: expect.anything() })
+      )
+    })
+
     it('should handle storage errors gracefully', async () => {
       vi.mocked(mockStorage.get).mockRejectedValue(new Error('Storage error'))
 
@@ -146,16 +199,42 @@ describe('MessageBufferService', () => {
       ).resolves.not.toThrow()
     })
 
-    it('should handle queue send errors', async () => {
+    it('should handle queue send errors when flushing immediately', async () => {
+      const existingMessages = Array.from({ length: 9 }, (_, i) => ({
+        username: `user${i}`,
+        content: `message ${i}`,
+        timestamp: Date.now() - 1000,
+        messageId: i + 1,
+        userId: i + 1
+      }))
+
       const existingBuffer = {
-        messages: Array.from({ length: 9 }, (_, i) => ({
-          username: `user${i}`,
-          content: `message ${i}`,
-          timestamp: Date.now() - 1000,
-          messageId: i + 1,
-          userId: i + 1
-        })),
-        firstMessageTimestamp: Date.now() - 1000
+        messages: existingMessages,
+        lastMessageTimestamp: Date.now() - 1000,
+        scheduledFlushTime: null
+      }
+
+      vi.mocked(mockStorage.get).mockResolvedValue(JSON.stringify(existingBuffer))
+      vi.mocked(mockQueue.send).mockRejectedValue(new Error('Queue error'))
+
+      await expect(
+        bufferService.bufferMessage(chatId, messageItem, 10)
+      ).rejects.toThrow('Queue error')
+    })
+
+    it('should handle queue send errors when scheduling flush trigger', async () => {
+      const existingBuffer = {
+        messages: [
+          {
+            username: 'user1',
+            content: 'first message',
+            timestamp: Date.now() - 3000,
+            messageId: 1,
+            userId: 1
+          }
+        ],
+        lastMessageTimestamp: Date.now() - 3000,
+        scheduledFlushTime: null
       }
 
       vi.mocked(mockStorage.get).mockResolvedValue(JSON.stringify(existingBuffer))
@@ -181,7 +260,8 @@ describe('MessageBufferService', () => {
             userId: 1
           }
         ],
-        firstMessageTimestamp: Date.now()
+        lastMessageTimestamp: Date.now(),
+        scheduledFlushTime: null
       }
 
       vi.mocked(mockStorage.get).mockResolvedValue(JSON.stringify(buffer))
@@ -208,7 +288,8 @@ describe('MessageBufferService', () => {
     it('should do nothing when buffer is empty', async () => {
       const buffer = {
         messages: [],
-        firstMessageTimestamp: Date.now()
+        lastMessageTimestamp: Date.now(),
+        scheduledFlushTime: null
       }
 
       vi.mocked(mockStorage.get).mockResolvedValue(JSON.stringify(buffer))

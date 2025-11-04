@@ -218,3 +218,220 @@ export async function processQueuedMessage(
     env: deps.env
   })
 }
+
+/**
+ * Processes multiple queued messages as a single batch
+ * Combines all messages into one LLM request and generates a single response
+ */
+export async function processQueuedMessagesBatch(
+  chatId: number,
+  messageItems: QueuedMessageItem[],
+  deps: ProcessMessageDeps
+): Promise<void> {
+  if (messageItems.length === 0) {
+    console.warn(`Empty message batch for chat ${chatId}, skipping`)
+    return
+  }
+
+  const bot = new Telegraf(deps.env.BOT_TOKEN, {
+    telegram: { webhookReply: false }
+  })
+
+  const sessionData = await deps.sessionController.getSession(chatId)
+
+  // Combine all messages into a single content array
+  const allImageInputs: OpenAI.Responses.ResponseInputImage[] = []
+  const combinedTextParts: string[] = []
+
+  for (const messageItem of messageItems) {
+    const message =
+      messageItem.stickerDescription ||
+      messageItem.stickerEmoji ||
+      messageItem.caption ||
+      messageItem.content
+    const trimmedMessage = message.trim()
+
+    if (!trimmedMessage) {
+      console.warn(`Skipping empty message in batch for chat ${chatId}`)
+      continue
+    }
+
+    // Format: [Username]: message content
+    const formattedMessage = `[${messageItem.username}]: ${trimmedMessage}`
+    combinedTextParts.push(formattedMessage)
+
+    // Collect all images from all messages
+    if (messageItem.imageInputs && messageItem.imageInputs.length > 0) {
+      allImageInputs.push(...messageItem.imageInputs)
+    }
+  }
+
+  if (combinedTextParts.length === 0) {
+    console.warn(`No valid messages in batch for chat ${chatId}, skipping`)
+    return
+  }
+
+  // Join all messages with double newlines for clarity
+  const combinedText = combinedTextParts.join('\n\n')
+
+  console.log({
+    log: 'processQueuedMessagesBatch',
+    chatId,
+    messageCount: messageItems.length,
+    combinedLength: combinedText.length,
+    imageCount: allImageInputs.length
+  })
+
+  // Create a single user message with all content
+  const content: OpenAI.Responses.ResponseInputContent[] = [
+    {
+      type: 'input_text',
+      text: combinedText
+    }
+  ]
+
+  // Add all collected images
+  if (allImageInputs.length > 0) {
+    content.push(...allImageInputs)
+  }
+
+  const newMessage: OpenAI.Responses.ResponseInputItem.Message = {
+    role: 'user',
+    content
+  }
+
+  // Fetch relevant summaries using the combined text
+  let relativeMessage: (RecordMetadata | undefined)[] = []
+  if (sessionData.toggle_history) {
+    relativeMessage = await deps.embeddingService.fetchRelevantSummaries(
+      chatId,
+      combinedText
+    )
+  }
+
+  let formattedMemories: OpenAI.Responses.ResponseInputItem.Message[] = []
+  if (sessionData.toggle_history) {
+    formattedMemories = deps.sessionController.getFormattedMemories()
+  }
+
+  // Use the first message's userId for coin checking (or could check all users)
+  const hasEnoughCoins = await deps.userService.hasEnoughCoins(
+    messageItems[0].userId,
+    1
+  )
+
+  const historyMessages = sanitizeHistoryMessages(sessionData.userMessages)
+
+  const botMessages = await deps.responseApi(
+    [
+      ...formattedMemories,
+      ...relativeMessage.map(
+        (item) =>
+          ({
+            role: 'system',
+            content: [
+              {
+                type: 'input_text',
+                text:
+                  item &&
+                  typeof item === 'object' &&
+                  'content' in item &&
+                  typeof item.content === 'string'
+                    ? item.content
+                    : ''
+              }
+            ]
+          }) as unknown as OpenAI.Responses.ResponseOutputMessage
+      ),
+      ...historyMessages,
+      newMessage
+    ],
+    {
+      hasEnoughCoins,
+      model: sessionData.model,
+      prompt: sessionData.prompt
+    }
+  )
+
+  if (!botMessages) {
+    console.warn(`No bot messages returned for chat ${chatId}`)
+    return
+  }
+
+  const memoryItems = extractMemoryItems(botMessages)
+  if (sessionData.toggle_history) {
+    for (const memoryItem of memoryItems) {
+      await deps.sessionController.addMemory(chatId, memoryItem.content)
+    }
+  }
+
+  const responseMessages = filterResponseMessages(botMessages)
+
+  const messages = [
+    ...historyMessages,
+    newMessage,
+    ...buildAssistantHistoryMessages(botMessages)
+  ]
+
+  if (sessionData.toggle_history) {
+    const sanitizedForStorage = sanitizeHistoryMessages(messages)
+
+    if (sanitizedForStorage.length >= 20) {
+      const messagesToSummarize = sanitizedForStorage.slice(-20)
+
+      try {
+        const summaryText = await createConversationSummary(
+          messagesToSummarize,
+          deps.openai,
+          sessionData.model
+        )
+
+        await deps.embeddingService.saveSummary(chatId, summaryText)
+
+        const summaryMessage = createSummaryMessage(summaryText)
+        const remainingMessages = sanitizedForStorage.slice(0, -20)
+        const newHistory = [...remainingMessages, ...summaryMessage]
+
+        await deps.sessionController.updateSession(chatId, {
+          userMessages: newHistory
+        })
+      } catch (error) {
+        console.error('Error creating summary:', error)
+        await deps.sessionController.updateSession(chatId, {
+          userMessages: sanitizedForStorage.slice(-20)
+        })
+      }
+    } else {
+      await deps.sessionController.updateSession(chatId, {
+        userMessages: sanitizedForStorage
+      })
+    }
+  }
+
+  await bot.telegram.sendChatAction(
+    chatId,
+    'typing',
+    sessionData.chat_settings.send_message_option
+  )
+  await delay()
+
+  // Use the last message's info for the mock context
+  const lastMessage = messageItems[messageItems.length - 1]
+  const mockCtx = {
+    telegram: bot.telegram,
+    chat: { id: chatId },
+    message: { message_id: lastMessage.messageId },
+    from: {
+      id: lastMessage.userId,
+      first_name: lastMessage.userFirstName,
+      last_name: lastMessage.userLastName
+    }
+  } as unknown as Context
+
+  await dispatchResponsesSequentially(responseMessages, {
+    ctx: mockCtx,
+    sessionData,
+    userService: deps.userService,
+    env: deps.env
+  })
+}
