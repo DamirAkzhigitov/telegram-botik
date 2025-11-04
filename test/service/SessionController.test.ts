@@ -43,7 +43,8 @@ describe('SessionController', () => {
         chat_settings: {
           thread_id: undefined,
           reply_only_in_thread: false,
-          send_message_option: {}
+          send_message_option: {},
+          messageBatchLimit: 10
         }
       })
     })
@@ -101,7 +102,8 @@ describe('SessionController', () => {
         chat_settings: {
           thread_id: 999,
           reply_only_in_thread: true,
-          send_message_option: { parse_mode: 'HTML' }
+          send_message_option: { parse_mode: 'HTML' },
+          messageBatchLimit: 10
         },
         memories: []
       }
@@ -160,6 +162,61 @@ describe('SessionController', () => {
       const result = await sessionController.getSession(999)
 
       expect(result.model).toBe(DEFAULT_TEXT_MODEL)
+    })
+
+    it('should set default messageBatchLimit if missing', async () => {
+      const storedSessionWithoutBatchLimit: Partial<SessionData> = {
+        userMessages: [],
+        stickersPacks: ['pack1'],
+        prompt: '',
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        toggle_history: true,
+        model: DEFAULT_TEXT_MODEL,
+        chat_settings: {
+          thread_id: undefined,
+          reply_only_in_thread: false,
+          send_message_option: {}
+        },
+        memories: []
+      }
+
+      vi.mocked(mockStorage.get).mockResolvedValue(
+        JSON.stringify(storedSessionWithoutBatchLimit)
+      )
+
+      const result = await sessionController.getSession(999)
+
+      expect(result.chat_settings.messageBatchLimit).toBe(10)
+    })
+
+    it('should preserve existing messageBatchLimit', async () => {
+      const storedSessionWithBatchLimit: Partial<SessionData> = {
+        userMessages: [],
+        stickersPacks: ['pack1'],
+        prompt: '',
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        toggle_history: true,
+        model: DEFAULT_TEXT_MODEL,
+        chat_settings: {
+          thread_id: undefined,
+          reply_only_in_thread: false,
+          send_message_option: {},
+          messageBatchLimit: 5
+        },
+        memories: []
+      }
+
+      vi.mocked(mockStorage.get).mockResolvedValue(
+        JSON.stringify(storedSessionWithBatchLimit)
+      )
+
+      const result = await sessionController.getSession(999)
+
+      expect(result.chat_settings.messageBatchLimit).toBe(5)
     })
 
     it('should resolve model choice for existing model', async () => {
@@ -466,4 +523,3 @@ describe('SessionController', () => {
     })
   })
 })
-

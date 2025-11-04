@@ -44,7 +44,22 @@
       "database_name": "bot-users-db",
       "database_id": "0258e356-702e-4246-889f-50b82c573ad6"
     }
-  ]
+  ],
+  "queues": {
+    "producers": [
+      {
+        "queue": "telegram-messages",
+        "binding": "MESSAGE_QUEUE"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "telegram-messages",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5
+      }
+    ]
+  }
   /**
    * Note: Use secrets to store sensitive data.
    * https://developers.cloudflare.com/workers/configuration/secrets/

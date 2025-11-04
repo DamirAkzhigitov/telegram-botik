@@ -15,6 +15,7 @@ export interface ChatSettings {
   thread_id?: number
   reply_only_in_thread?: boolean
   send_message_option?: Record<string, unknown>
+  messageBatchLimit?: number
 }
 
 export interface SessionData {
@@ -96,4 +97,23 @@ export interface Transaction {
   balance_before: number
   balance_after: number
   created_at: string
+}
+
+export interface QueuedMessageItem {
+  username: string
+  content: string
+  timestamp: number
+  messageId: number
+  userId: number
+  userFirstName?: string
+  userLastName?: string
+  stickerDescription?: string | null
+  stickerEmoji?: string | null
+  caption?: string
+  imageInputs?: OpenAI.Responses.ResponseInputImage[]
+}
+
+export interface QueuedMessage {
+  chatId: number
+  messages: QueuedMessageItem[]
 }

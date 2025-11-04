@@ -196,8 +196,7 @@ export const collectStickerDescription = async (
         'image/webp'
       )
       if (imageUrl) {
-        const description = await getStickerDescription(imageUrl, stickerDeps)
-        return description
+        return await getStickerDescription(imageUrl, stickerDeps)
       }
     }
   }

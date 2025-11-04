@@ -45,18 +45,17 @@ vi.mock('../../src/utils', () => ({
   delay: vi.fn().mockResolvedValue(undefined)
 }))
 
+vi.mock('../../src/service/MessageBufferService', () => ({
+  MessageBufferService: vi.fn().mockImplementation(() => ({
+    bufferMessage: vi.fn().mockResolvedValue(undefined)
+  }))
+}))
+
 // Helpers to access mocks
 const ensureSessionReady = (await import('../../src/bot/sessionGuards')).ensureSessionReady as unknown as ReturnType<typeof vi.fn>
 const collectImageInputs = (await import('../../src/bot/media')).collectImageInputs as unknown as ReturnType<typeof vi.fn>
-const sanitizeHistoryMessages = (await import('../../src/bot/history')).sanitizeHistoryMessages as unknown as ReturnType<typeof vi.fn>
-const buildAssistantHistoryMessages = (await import('../../src/bot/history')).buildAssistantHistoryMessages as unknown as ReturnType<typeof vi.fn>
 const composeUserContent = (await import('../../src/bot/messageBuilder')).composeUserContent as unknown as ReturnType<typeof vi.fn>
-const createUserMessage = (await import('../../src/bot/messageBuilder')).createUserMessage as unknown as ReturnType<typeof vi.fn>
-const createLoggedMessage = (await import('../../src/bot/messageBuilder')).createLoggedMessage as unknown as ReturnType<typeof vi.fn>
-const extractMemoryItems = (await import('../../src/bot/messageBuilder')).extractMemoryItems as unknown as ReturnType<typeof vi.fn>
-const filterResponseMessages = (await import('../../src/bot/messageBuilder')).filterResponseMessages as unknown as ReturnType<typeof vi.fn>
 const dispatchResponsesSequentially = (await import('../../src/bot/responseDispatcher')).dispatchResponsesSequentially as unknown as ReturnType<typeof vi.fn>
-const delay = (await import('../../src/utils')).delay as unknown as ReturnType<typeof vi.fn>
 
 
 describe('messageHandler', () => {
@@ -90,7 +89,18 @@ describe('messageHandler', () => {
       } as any
     }
 
-    env = { BOT_TOKEN: 'token' }
+    env = {
+      BOT_TOKEN: 'token',
+      CHAT_SESSIONS_STORAGE: {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined),
+        list: vi.fn()
+      } as any,
+      MESSAGE_QUEUE: {
+        send: vi.fn().mockResolvedValue(undefined)
+      } as any
+    }
 
     responseApi = vi.fn().mockResolvedValue([
       { type: 'memory', content: 'remember this' },
@@ -159,7 +169,9 @@ describe('messageHandler', () => {
   } as any
 
   describe('happy path with history enabled', () => {
-    it('builds message, calls API, stores memory, updates session, dispatches', async () => {
+    it('buffers message instead of processing immediately', async () => {
+      const { MessageBufferService } = await import('../../src/service/MessageBufferService')
+
       await handleIncomingMessage(ctx as Context, {
         env,
         responseApi,
@@ -180,32 +192,23 @@ describe('messageHandler', () => {
       expect(sessionController.getSession).toHaveBeenCalledWith(777)
       expect(ensureSessionReady).toHaveBeenCalled()
       expect(collectImageInputs).toHaveBeenCalled()
-      expect(composeUserContent).toHaveBeenCalled()
-      expect(createUserMessage).toHaveBeenCalled()
-      expect(createLoggedMessage).toHaveBeenCalled()
 
-      // history related
-      expect(embeddingService.fetchRelevantSummaries).toHaveBeenCalledWith(777, 'hello bot message')
-      expect(sessionController.getFormattedMemories).toHaveBeenCalled()
+      // Message should be buffered, not processed immediately
+      const MockedBufferService = MessageBufferService as unknown as ReturnType<typeof vi.fn>
+      const bufferInstance = MockedBufferService.mock.results[0]?.value
+      expect(bufferInstance?.bufferMessage).toHaveBeenCalledWith(
+        777,
+        expect.objectContaining({
+          username: 'alice',
+          content: 'hello bot message'
+        }),
+        10
+      )
 
-      // API called with options
-      expect(responseApi).toHaveBeenCalled()
-      const [, options] = responseApi.mock.calls[0]
-      expect(options).toEqual({ hasEnoughCoins: true, model: 'gpt-5-mini-2025-08-07', prompt: '' })
-
-      // After API
-      expect(extractMemoryItems).toHaveBeenCalled()
-      expect(filterResponseMessages).toHaveBeenCalled()
-
-      // session update
-      expect(sanitizeHistoryMessages).toHaveBeenCalled()
-      expect(buildAssistantHistoryMessages).toHaveBeenCalled()
-      expect(sessionController.updateSession).toHaveBeenCalledWith(777, expect.objectContaining({ userMessages: expect.any(Array) }))
-
-      // dispatch and UX
-      expect(ctx.telegram!.sendChatAction).toHaveBeenCalledWith(777, 'typing', {})
-      expect(delay).toHaveBeenCalled()
-      expect(dispatchResponsesSequentially).toHaveBeenCalled()
+      // These should NOT be called in handleIncomingMessage anymore
+      expect(composeUserContent).not.toHaveBeenCalled()
+      expect(responseApi).not.toHaveBeenCalled()
+      expect(dispatchResponsesSequentially).not.toHaveBeenCalled()
     })
   })
 
@@ -346,6 +349,7 @@ describe('messageHandler', () => {
     })
 
     it('should handle caption when message has caption', async () => {
+      const { MessageBufferService } = await import('../../src/service/MessageBufferService')
       const ctxWithCaption = {
         ...ctx,
         message: {
@@ -364,14 +368,21 @@ describe('messageHandler', () => {
         openai: mockOpenAI
       })
 
-      expect(composeUserContent).toHaveBeenCalledWith({
-        username: 'alice',
-        trimmedMessage: 'image caption',
-        imageInputs: []
-      })
+      const MockedBufferService = MessageBufferService as unknown as ReturnType<typeof vi.fn>
+      const bufferInstance = MockedBufferService.mock.results[0]?.value
+      expect(bufferInstance?.bufferMessage).toHaveBeenCalledWith(
+        777,
+        expect.objectContaining({
+          username: 'alice',
+          content: 'image caption',
+          caption: 'image caption'
+        }),
+        10
+      )
     })
 
     it('should handle message with both text and caption', async () => {
+      const { MessageBufferService } = await import('../../src/service/MessageBufferService')
       const ctxWithBoth = {
         ...ctx,
         message: {
@@ -391,23 +402,25 @@ describe('messageHandler', () => {
         openai: mockOpenAI
       })
 
-      expect(composeUserContent).toHaveBeenCalledWith({
-        username: 'alice',
-        trimmedMessage: 'image caption',
-        imageInputs: []
-      })
+      const MockedBufferService = MessageBufferService as unknown as ReturnType<typeof vi.fn>
+      const bufferInstance = MockedBufferService.mock.results[0]?.value
+      expect(bufferInstance?.bufferMessage).toHaveBeenCalledWith(
+        777,
+        expect.objectContaining({
+          username: 'alice',
+          content: 'image caption', // Caption takes precedence
+          caption: 'image caption'
+        }),
+        10
+      )
     })
 
-    it('should create summary when messages length >= 20', async () => {
-      const createConversationSummary = (await import('../../src/bot/history')).createConversationSummary as unknown as ReturnType<typeof vi.fn>
-      const saveSummary = embeddingService.saveSummary
-
+    it('should buffer message when messages length >= 20', async () => {
+      const { MessageBufferService } = await import('../../src/service/MessageBufferService')
       const manyMessages = Array(25).fill({
         role: 'user',
         content: [{ type: 'input_text', text: 'msg' }]
       })
-
-      sanitizeHistoryMessages.mockReturnValueOnce(manyMessages)
 
       sessionController.getSession.mockResolvedValueOnce({
         userMessages: manyMessages.slice(0, 5),
@@ -435,21 +448,18 @@ describe('messageHandler', () => {
         openai: mockOpenAI
       })
 
-      expect(createConversationSummary).toHaveBeenCalled()
-      expect(saveSummary).toHaveBeenCalled()
-      expect(sessionController.updateSession).toHaveBeenCalled()
+      // Summary creation happens in processQueuedMessage, not handleIncomingMessage
+      const MockedBufferService = MessageBufferService as unknown as ReturnType<typeof vi.fn>
+      const bufferInstance = MockedBufferService.mock.results[0]?.value
+      expect(bufferInstance?.bufferMessage).toHaveBeenCalled()
     })
 
-    it('should handle summary creation error gracefully', async () => {
-      const createConversationSummary = (await import('../../src/bot/history')).createConversationSummary as unknown as ReturnType<typeof vi.fn>
-
+    it('should buffer message even when session has many messages', async () => {
+      const { MessageBufferService } = await import('../../src/service/MessageBufferService')
       const manyMessages = Array(25).fill({
         role: 'user',
         content: [{ type: 'input_text', text: 'msg' }]
       })
-
-      sanitizeHistoryMessages.mockReturnValueOnce(manyMessages)
-      createConversationSummary.mockRejectedValueOnce(new Error('Summary failed'))
 
       sessionController.getSession.mockResolvedValueOnce({
         userMessages: manyMessages.slice(0, 5),
@@ -477,20 +487,34 @@ describe('messageHandler', () => {
         openai: mockOpenAI
       })
 
-      expect(sessionController.updateSession).toHaveBeenCalledWith(777, {
-        userMessages: expect.arrayContaining([])
-      })
+      // Summary creation error handling happens in processQueuedMessage
+      const MockedBufferService = MessageBufferService as unknown as ReturnType<typeof vi.fn>
+      const bufferInstance = MockedBufferService.mock.results[0]?.value
+      expect(bufferInstance?.bufferMessage).toHaveBeenCalled()
     })
 
-    it('should not create summary when messages length < 20', async () => {
-      const createConversationSummary = (await import('../../src/bot/history')).createConversationSummary as unknown as ReturnType<typeof vi.fn>
-
+    it('should buffer message when messages length < 20', async () => {
+      const { MessageBufferService } = await import('../../src/service/MessageBufferService')
       const fewMessages = Array(15).fill({
         role: 'user',
         content: [{ type: 'input_text', text: 'msg' }]
       })
 
-      sanitizeHistoryMessages.mockReturnValue(fewMessages)
+      sessionController.getSession.mockResolvedValueOnce({
+        userMessages: fewMessages,
+        stickersPacks: [],
+        prompt: '',
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        toggle_history: true,
+        model: 'gpt-5-mini-2025-08-07',
+        memories: [],
+        chat_settings: {
+          reply_only_in_thread: false,
+          send_message_option: {}
+        }
+      } as SessionData)
 
       await handleIncomingMessage(ctx as Context, {
         env,
@@ -502,17 +526,15 @@ describe('messageHandler', () => {
         openai: mockOpenAI
       })
 
-      expect(createConversationSummary).not.toHaveBeenCalled()
-      // The updateSession will be called with messages including the new one and assistant response
-      expect(sessionController.updateSession).toHaveBeenCalled()
-      const updateCall = sessionController.updateSession.mock.calls.find(
-        (call: any[]) => call[0] === 777 && call[1].userMessages
-      )
-      expect(updateCall).toBeDefined()
-      expect(updateCall[1].userMessages.length).toBeGreaterThanOrEqual(15)
+      // Summary creation happens in processQueuedMessage, not handleIncomingMessage
+      const MockedBufferService = MessageBufferService as unknown as ReturnType<typeof vi.fn>
+      const bufferInstance = MockedBufferService.mock.results[0]?.value
+      expect(bufferInstance?.bufferMessage).toHaveBeenCalled()
+      expect(sessionController.updateSession).not.toHaveBeenCalled()
     })
 
-    it('should handle relativeMessage with undefined items', async () => {
+    it('should buffer message even with relevant summaries', async () => {
+      const { MessageBufferService } = await import('../../src/service/MessageBufferService')
       embeddingService.fetchRelevantSummaries.mockResolvedValueOnce([
         { id: '1', content: 'summary', score: 0.9 },
         undefined,
@@ -529,13 +551,15 @@ describe('messageHandler', () => {
         openai: mockOpenAI
       })
 
-      expect(responseApi).toHaveBeenCalled()
-      const [messages] = responseApi.mock.calls[0]
-      // Should handle undefined items in relativeMessage
-      expect(messages.length).toBeGreaterThan(0)
+      // Relative message handling happens in processQueuedMessage
+      expect(responseApi).not.toHaveBeenCalled()
+      const MockedBufferService = MessageBufferService as unknown as ReturnType<typeof vi.fn>
+      const bufferInstance = MockedBufferService.mock.results[0]?.value
+      expect(bufferInstance?.bufferMessage).toHaveBeenCalled()
     })
 
-    it('should handle relativeMessage with missing content', async () => {
+    it('should buffer message even with missing content in summaries', async () => {
+      const { MessageBufferService } = await import('../../src/service/MessageBufferService')
       embeddingService.fetchRelevantSummaries.mockResolvedValueOnce([
         { id: '1', score: 0.9 } // missing content
       ])
@@ -550,7 +574,11 @@ describe('messageHandler', () => {
         openai: mockOpenAI
       })
 
-      expect(responseApi).toHaveBeenCalled()
+      // Missing content handling happens in processQueuedMessage
+      expect(responseApi).not.toHaveBeenCalled()
+      const MockedBufferService = MessageBufferService as unknown as ReturnType<typeof vi.fn>
+      const bufferInstance = MockedBufferService.mock.results[0]?.value
+      expect(bufferInstance?.bufferMessage).toHaveBeenCalled()
     })
 
     it('should handle user registration error gracefully', async () => {
@@ -590,7 +618,8 @@ describe('messageHandler', () => {
       expect(dispatchResponsesSequentially).not.toHaveBeenCalled()
     })
 
-    it('should handle reply_only_in_thread when message is in thread', async () => {
+    it('should buffer message when reply_only_in_thread and message is in thread', async () => {
+      const { MessageBufferService } = await import('../../src/service/MessageBufferService')
       sessionController.getSession.mockResolvedValueOnce({
         userMessages: [],
         stickersPacks: [],
@@ -626,8 +655,12 @@ describe('messageHandler', () => {
         openai: mockOpenAI
       })
 
-      expect(responseApi).toHaveBeenCalled()
-      expect(dispatchResponsesSequentially).toHaveBeenCalled()
+      // Message should be buffered
+      const MockedBufferService = MessageBufferService as unknown as ReturnType<typeof vi.fn>
+      const bufferInstance = MockedBufferService.mock.results[0]?.value
+      expect(bufferInstance?.bufferMessage).toHaveBeenCalled()
+      expect(responseApi).not.toHaveBeenCalled()
+      expect(dispatchResponsesSequentially).not.toHaveBeenCalled()
     })
   })
 })

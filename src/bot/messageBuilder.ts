@@ -22,7 +22,7 @@ export const composeUserContent = ({
   if (trimmedMessage.length > 0) {
     content.push({
       type: 'input_text',
-      text: `${username}: ${trimmedMessage}`
+      text: `пользователь ${username} отправил стикер, далее описание: ${trimmedMessage}`
     })
   } else if (imageInputs.length > 0) {
     content.push({
@@ -36,7 +36,7 @@ export const composeUserContent = ({
   if (content.length === 0) {
     content.push({
       type: 'input_text',
-      text: `${username}: ${trimmedMessage}`
+      text: `пользователь ${username} отправил изображение, далее описание: ${trimmedMessage}`
     })
   }
 

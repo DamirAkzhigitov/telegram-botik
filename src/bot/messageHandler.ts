@@ -4,26 +4,11 @@ import type { AxiosInstance } from 'axios'
 import { EmbeddingService } from '../service/EmbeddingService'
 import { SessionController } from '../service/SessionController'
 import { UserService } from '../service/UserService'
-import type { MessagesArray } from '../types'
-import {
-  composeUserContent,
-  createLoggedMessage,
-  createUserMessage,
-  extractMemoryItems,
-  filterResponseMessages
-} from './messageBuilder'
-import {
-  buildAssistantHistoryMessages,
-  createConversationSummary,
-  createSummaryMessage,
-  sanitizeHistoryMessages
-} from './history'
+import { MessageBufferService } from '../service/MessageBufferService'
+import type { MessagesArray, QueuedMessageItem } from '../types'
 import { collectImageInputs, collectStickerDescription } from './media'
 import { ensureSessionReady } from './sessionGuards'
-import { dispatchResponsesSequentially } from './responseDispatcher'
-import { delay } from '../utils'
 import { BOT_NAME } from './constants'
-import type { RecordMetadata } from '@pinecone-database/pinecone'
 
 type ResponseApi = (
   messages: (
@@ -138,158 +123,32 @@ export const handleIncomingMessage = async (
   const message = stickerDescription || stickerEmoji || caption || userMessage
   const trimmedMessage = message.trim()
 
-  const content = composeUserContent({
-    username,
-    trimmedMessage,
-    imageInputs
-  })
-
-  const newMessage: OpenAI.Responses.ResponseInputItem.Message =
-    createUserMessage(content)
-
-  const loggedMessage = createLoggedMessage(newMessage)
-
-  console.log({
-    log: 'newMessage',
-    newMessage: loggedMessage
-  })
-
   if (!shouldReply) return
 
-  let relativeMessage: (RecordMetadata | undefined)[] = []
-
-  if (sessionData.toggle_history) {
-    relativeMessage = await deps.embeddingService.fetchRelevantSummaries(
-      chatId,
-      trimmedMessage
-    )
+  const messageItem: QueuedMessageItem = {
+    username,
+    content: trimmedMessage,
+    timestamp: Date.now(),
+    messageId: ctx.message?.message_id || 0,
+    userId: ctx.message?.from?.id || 0,
+    userFirstName: ctx.message?.from?.first_name,
+    userLastName: ctx.message?.from?.last_name,
+    stickerDescription: stickerDescription || null,
+    stickerEmoji: stickerEmoji || null,
+    caption: caption || undefined,
+    imageInputs: imageInputs.length > 0 ? imageInputs : undefined
   }
 
-  console.log({
-    log: 'relativeMessage',
-    relativeMessage
-  })
+  // Buffer the message instead of processing immediately
+  const bufferService = new MessageBufferService(deps.env)
+  const batchLimit = sessionData.chat_settings.messageBatchLimit || 10
 
-  let formattedMemories: OpenAI.Responses.ResponseInputItem.Message[] = []
-
-  if (sessionData.toggle_history) {
-    formattedMemories = deps.sessionController.getFormattedMemories()
-  }
+  await bufferService.bufferMessage(chatId, messageItem, batchLimit)
 
   console.log({
-    log: 'formattedMemories',
-    formattedMemories
-  })
-
-  if (!ctx.from) return
-  const hasEnoughCoins = await deps.userService.hasEnoughCoins(ctx.from.id, 1)
-
-  const historyMessages = sanitizeHistoryMessages(sessionData.userMessages)
-
-  const botMessages = await deps.responseApi(
-    [
-      ...formattedMemories,
-      ...relativeMessage.map(
-        (item) =>
-          ({
-            role: 'system',
-            content: [
-              {
-                type: 'input_text',
-                text:
-                  item &&
-                  typeof item === 'object' &&
-                  'content' in item &&
-                  typeof item.content === 'string'
-                    ? item.content
-                    : ''
-              }
-            ]
-          }) as unknown as OpenAI.Responses.ResponseOutputMessage
-      ),
-      ...historyMessages,
-      newMessage
-    ],
-    {
-      hasEnoughCoins,
-      model: sessionData.model,
-      prompt: sessionData.prompt
-    }
-  )
-
-  console.log({
-    log: 'botMessages',
-    botMessages
-  })
-
-  if (!botMessages) return
-
-  const memoryItems = extractMemoryItems(botMessages)
-
-  console.log({
-    log: 'memoryItems',
-    memoryItems
-  })
-
-  if (sessionData.toggle_history) {
-    for (const memoryItem of memoryItems) {
-      await deps.sessionController.addMemory(chatId, memoryItem.content)
-    }
-  }
-
-  const responseMessages = filterResponseMessages(botMessages)
-
-  const messages = [
-    ...historyMessages,
-    newMessage,
-    ...buildAssistantHistoryMessages(botMessages)
-  ]
-
-  if (sessionData.toggle_history) {
-    const sanitizedForStorage = sanitizeHistoryMessages(messages)
-
-    if (sanitizedForStorage.length >= 20) {
-      const messagesToSummarize = sanitizedForStorage.slice(-20)
-
-      try {
-        const summaryText = await createConversationSummary(
-          messagesToSummarize,
-          deps.openai,
-          sessionData.model
-        )
-
-        await deps.embeddingService.saveSummary(chatId, summaryText)
-
-        const summaryMessage = createSummaryMessage(summaryText)
-        const remainingMessages = sanitizedForStorage.slice(0, -20)
-        const newHistory = [...remainingMessages, ...summaryMessage]
-
-        await deps.sessionController.updateSession(chatId, {
-          userMessages: newHistory
-        })
-      } catch (error) {
-        console.error('Error creating summary:', error)
-        await deps.sessionController.updateSession(chatId, {
-          userMessages: sanitizedForStorage.slice(-20)
-        })
-      }
-    } else {
-      await deps.sessionController.updateSession(chatId, {
-        userMessages: sanitizedForStorage
-      })
-    }
-  }
-
-  await ctx.telegram.sendChatAction(
+    log: 'bufferedMessage',
     chatId,
-    'typing',
-    sessionData.chat_settings.send_message_option
-  )
-  await delay()
-  await dispatchResponsesSequentially(responseMessages, {
-    ctx,
-    sessionData,
-    userService: deps.userService,
-    env: deps.env
+    username,
+    messageItem
   })
 }

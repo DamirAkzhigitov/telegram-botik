@@ -1,10 +1,20 @@
 import { createBot } from './bot/createBot'
 import { getSessions, getSession, getAdminChats } from './api/sessions'
 import type { Update } from 'telegraf/types'
+import type { QueuedMessage } from './types'
+import { processQueuedMessage } from './bot/processQueuedMessages'
+import { EmbeddingService } from './service/EmbeddingService'
+import { SessionController } from './service/SessionController'
+import { UserService } from './service/UserService'
+import { getOpenAIClient } from './gpt'
+import { createTelegramFileClient } from './bot/media'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     return handleUpdate(request, env)
+  },
+  async queue(batch: MessageBatch<QueuedMessage>, env: Env): Promise<void> {
+    await handleQueueBatch(batch, env)
   }
 }
 
@@ -57,6 +67,125 @@ async function handleUpdate(request: Request, env: Env) {
   }
 
   return new Response('Method Not Allowed', { status: 405 })
+}
+
+/**
+ * Process messages from the queue with per-chat locking to ensure linear processing
+ */
+async function handleQueueBatch(
+  batch: MessageBatch<QueuedMessage>,
+  env: Env
+): Promise<void> {
+  const { responseApi, openai } = getOpenAIClient(env.API_KEY)
+  const embeddingService = new EmbeddingService(env)
+  const sessionController = new SessionController(env)
+  const userService = new UserService(env.DB)
+  const telegramFileClient = createTelegramFileClient()
+
+  const deps = {
+    env,
+    responseApi,
+    embeddingService,
+    sessionController,
+    userService,
+    telegramFileClient,
+    openai
+  }
+
+  // Group messages by chatId to process them sequentially per chat
+  const messagesByChat = new Map<
+    number,
+    Array<{ message: Message<QueuedMessage>; body: QueuedMessage }>
+  >()
+  for (const message of batch.messages) {
+    const chatId = message.body.chatId
+    if (!messagesByChat.has(chatId)) {
+      messagesByChat.set(chatId, [])
+    }
+    messagesByChat.get(chatId)!.push({ message, body: message.body })
+  }
+
+  // Process each chat's messages sequentially
+  for (const [chatId, messageEntries] of messagesByChat) {
+    await processChatMessages(chatId, messageEntries, deps, env)
+  }
+}
+
+/**
+ * Process all messages for a specific chat with locking mechanism
+ */
+async function processChatMessages(
+  chatId: number,
+  messageEntries: Array<{
+    message: Message<QueuedMessage>
+    body: QueuedMessage
+  }>,
+  deps: Parameters<typeof processQueuedMessage>[2],
+  env: Env
+): Promise<void> {
+  const lockKey = `processing_${chatId}`
+  const lockTimeout = 300000 // 5 minutes max processing time
+
+  // Try to acquire lock
+  const lockValue = Date.now().toString()
+  const existingLock = await env.CHAT_SESSIONS_STORAGE.get(lockKey)
+
+  if (existingLock) {
+    const lockTimestamp = parseInt(existingLock, 10)
+    const lockAge = Date.now() - lockTimestamp
+
+    // If lock is too old, assume previous processing crashed and clear it
+    if (lockAge > lockTimeout) {
+      console.warn(
+        `Lock for chat ${chatId} is too old (${lockAge}ms), clearing and proceeding`
+      )
+      await env.CHAT_SESSIONS_STORAGE.delete(lockKey)
+    } else {
+      // Chat is currently being processed, retry messages with delay
+      console.log(
+        `Chat ${chatId} is locked, retrying ${messageEntries.length} messages`
+      )
+      for (const { message } of messageEntries) {
+        message.retry({ delaySeconds: 2 })
+      }
+      return
+    }
+  }
+
+  // Acquire lock
+  try {
+    await env.CHAT_SESSIONS_STORAGE.put(lockKey, lockValue, {
+      expirationTtl: Math.floor(lockTimeout / 1000)
+    })
+
+    // Process all messages for this chat sequentially
+    for (const { body: queuedMessage, message } of messageEntries) {
+      let batchFailed = false
+
+      // Process each message in the batch sequentially
+      for (const messageItem of queuedMessage.messages) {
+        try {
+          await processQueuedMessage(chatId, messageItem, deps)
+        } catch (error) {
+          console.error(`Error processing message for chat ${chatId}:`, error)
+          // Mark batch as failed and retry the entire message batch
+          batchFailed = true
+          message.retry({ delaySeconds: 5 })
+          // Break out of processing this batch since we're retrying it
+          break
+        }
+      }
+
+      // Only acknowledge if batch was processed successfully
+      if (!batchFailed) {
+        message.ack()
+      }
+    }
+  } finally {
+    // Always release lock
+    await env.CHAT_SESSIONS_STORAGE.delete(lockKey)
+    console.log(`Released lock for chat ${chatId}`)
+  }
 }
 
 async function handleApiRequest(
@@ -226,7 +355,7 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
         // Get initData from Telegram Web App
         // initData is a query string that Telegram provides when opened from Telegram
         const initData = tg.initData || '';
-        
+
         if (!initData) {
           setError('Authentication required. Please open this app from Telegram.');
           setLoading(false);
@@ -239,7 +368,7 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       function loadSessions(auth) {
         const baseUrl = window.location.origin;
         const url = \`\${baseUrl}/api/sessions?_auth=\${encodeURIComponent(auth)}\`;
-        
+
         fetch(url)
           .then(res => {
             if (!res.ok) {
@@ -264,15 +393,15 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       function loadSessionDetail(chatId) {
         const tg = window.Telegram?.WebApp;
         const initData = tg?.initData || '';
-        
+
         if (!initData) {
           setError('Authentication required');
           return;
         }
-        
+
         const baseUrl = window.location.origin;
         const url = \`\${baseUrl}/api/sessions/\${chatId}?_auth=\${encodeURIComponent(initData)}\`;
-        
+
         fetch(url)
           .then(res => {
             if (!res.ok) throw new Error(\`HTTP \${res.status}\`);
@@ -304,64 +433,64 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
             </button>
             <div className="session-detail">
               <h2>{selectedSession.chatInfo?.title || \`Chat \${selectedSession.chatId}\`}</h2>
-              
+
               <div className="detail-item">
                 <label>Chat ID</label>
                 <value>{selectedSession.chatId}</value>
               </div>
-              
+
               <div className="detail-item">
                 <label>Model</label>
                 <value>{session.model || 'not_set'}</value>
               </div>
-              
+
               <div className="detail-item">
                 <label>Prompt</label>
                 <value>{session.prompt || '(empty)'}</value>
               </div>
-              
+
               <div className="detail-item">
                 <label>Sticker Packs</label>
                 <value>{session.stickersPacks?.join(', ') || 'none'}</value>
               </div>
-              
+
               <div className="detail-item">
                 <label>Memories Count</label>
                 <value>{session.memories?.length || 0}</value>
               </div>
-              
+
               <div className="detail-item">
                 <label>User Messages Count</label>
                 <value>{session.userMessages?.length || 0}</value>
               </div>
-              
+
               <div className="detail-item">
                 <label>Toggle History</label>
                 <value>{session.toggle_history ? 'Enabled' : 'Disabled'}</value>
               </div>
-              
+
               <div className="detail-item">
                 <label>First Time</label>
                 <value>{session.firstTime ? 'Yes' : 'No'}</value>
               </div>
-              
+
               <div className="detail-item">
                 <label>Prompt Not Set</label>
                 <value>{session.promptNotSet ? 'Yes' : 'No'}</value>
               </div>
-              
+
               <div className="detail-item">
                 <label>Sticker Not Set</label>
                 <value>{session.stickerNotSet ? 'Yes' : 'No'}</value>
               </div>
-              
+
               {session.chat_settings && (
                 <div className="detail-item">
                   <label>Chat Settings</label>
                   <value>{JSON.stringify(session.chat_settings, null, 2)}</value>
                 </div>
               )}
-              
+
               {session.memories && session.memories.length > 0 && (
                 <div className="detail-item">
                   <label>Memories</label>

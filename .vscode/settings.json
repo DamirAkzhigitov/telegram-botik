@@ -28,5 +28,5 @@
     "editor.formatOnSave": true
   },
   "cursor.composer.shouldAutoSaveNonAgent": false,
-  "editor.experimentalGpuAcceleration": "on"
+  "editor.experimentalGpuAcceleration": "off"
 }

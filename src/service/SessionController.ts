@@ -7,7 +7,8 @@ const defaultStickerPack = 'koshachiy_raskolbas'
 const defaultSettings = {
   thread_id: undefined,
   reply_only_in_thread: false,
-  send_message_option: {}
+  send_message_option: {},
+  messageBatchLimit: 10
 }
 
 export class SessionController {
@@ -48,6 +49,14 @@ export class SessionController {
         this.session.model = DEFAULT_TEXT_MODEL
       } else if (this.session.model !== 'not_set') {
         this.session.model = resolveModelChoice(this.session.model)
+      }
+      // Ensure chat_settings exists and has messageBatchLimit
+      if (!this.session.chat_settings) {
+        this.session.chat_settings = defaultSettings
+      } else if (
+        typeof this.session.chat_settings.messageBatchLimit === 'undefined'
+      ) {
+        this.session.chat_settings.messageBatchLimit = 10
       }
       return this.session
     } catch (e) {

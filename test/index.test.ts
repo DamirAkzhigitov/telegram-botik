@@ -21,6 +21,29 @@ vi.mock('../src/api/sessions', () => ({
   getAdminChats: (...args: any[]) => mockGetAdminChats(...args)
 }))
 
+// Mock processQueuedMessage and dependencies
+vi.mock('../src/bot/processQueuedMessages', () => ({
+  processQueuedMessage: vi.fn().mockResolvedValue(undefined)
+}))
+vi.mock('../src/gpt', () => ({
+  getOpenAIClient: vi.fn().mockReturnValue({
+    responseApi: vi.fn(),
+    openai: {}
+  })
+}))
+vi.mock('../src/service/EmbeddingService', () => ({
+  EmbeddingService: vi.fn()
+}))
+vi.mock('../src/service/SessionController', () => ({
+  SessionController: vi.fn()
+}))
+vi.mock('../src/service/UserService', () => ({
+  UserService: vi.fn()
+}))
+vi.mock('../src/bot/media', () => ({
+  createTelegramFileClient: vi.fn().mockReturnValue({})
+}))
+
 describe('Worker Entry Point', () => {
   let mockEnv: any
 
@@ -277,6 +300,187 @@ describe('Worker Entry Point', () => {
       const response = await worker.fetch(request, mockEnv)
 
       expect(response.status).toBe(405)
+    })
+  })
+
+  describe('Queue handler', () => {
+    let mockProcessQueuedMessage: ReturnType<typeof vi.fn>
+
+    beforeEach(async () => {
+      vi.clearAllMocks()
+      const { processQueuedMessage } = await import('../src/bot/processQueuedMessages')
+      mockProcessQueuedMessage = vi.mocked(processQueuedMessage)
+      mockProcessQueuedMessage.mockResolvedValue(undefined)
+
+      mockEnv = {
+        ...mockEnv,
+        MESSAGE_QUEUE: {
+          send: vi.fn()
+        } as any,
+        CHAT_SESSIONS_STORAGE: {
+          get: vi.fn(),
+          put: vi.fn(),
+          delete: vi.fn()
+        } as any
+      }
+    })
+
+    it('should process queue messages', async () => {
+      const mockStorage = mockEnv.CHAT_SESSIONS_STORAGE as any
+      vi.mocked(mockStorage.get).mockResolvedValue(null) // No lock
+      vi.mocked(mockStorage.put).mockResolvedValue(undefined)
+      vi.mocked(mockStorage.delete).mockResolvedValue(undefined)
+
+      const batch = {
+        messages: [
+          {
+            id: 'msg1',
+            timestamp: new Date(),
+            body: {
+              chatId: 123,
+              messages: [
+                {
+                  username: 'user1',
+                  content: 'message 1',
+                  timestamp: Date.now(),
+                  messageId: 1,
+                  userId: 1
+                }
+              ]
+            },
+            retry: vi.fn(),
+            ack: vi.fn()
+          }
+        ],
+        queue: 'telegram-messages',
+        retryAll: vi.fn(),
+        ackAll: vi.fn()
+      } as any
+
+      await worker.queue(batch, mockEnv, {} as ExecutionContext)
+
+      expect(mockStorage.get).toHaveBeenCalled()
+      expect(mockProcessQueuedMessage).toHaveBeenCalled()
+      expect(mockStorage.delete).toHaveBeenCalledWith('processing_123')
+    })
+
+    it('should retry messages when chat is locked', async () => {
+      const mockStorage = mockEnv.CHAT_SESSIONS_STORAGE as any
+      const lockTimestamp = Date.now().toString()
+      vi.mocked(mockStorage.get).mockResolvedValue(lockTimestamp)
+
+      const message = {
+        id: 'msg1',
+        timestamp: new Date(),
+        body: {
+          chatId: 123,
+          messages: [
+            {
+              username: 'user1',
+              content: 'message 1',
+              timestamp: Date.now(),
+              messageId: 1,
+              userId: 1
+            }
+          ]
+        },
+        retry: vi.fn(),
+        ack: vi.fn()
+      }
+
+      const batch = {
+        messages: [message],
+        queue: 'telegram-messages',
+        retryAll: vi.fn(),
+        ackAll: vi.fn()
+      } as any
+
+      await worker.queue(batch, mockEnv, {} as ExecutionContext)
+
+      expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 2 })
+      expect(mockProcessQueuedMessage).not.toHaveBeenCalled()
+    })
+
+    it('should clear old locks and process', async () => {
+      const mockStorage = mockEnv.CHAT_SESSIONS_STORAGE as any
+      const oldLockTimestamp = (Date.now() - 400000).toString() // 6+ minutes ago
+      vi.mocked(mockStorage.get)
+        .mockResolvedValueOnce(oldLockTimestamp) // Lock check
+        .mockResolvedValueOnce(null) // Session check
+      vi.mocked(mockStorage.delete).mockResolvedValue(undefined)
+      vi.mocked(mockStorage.put).mockResolvedValue(undefined)
+
+      const batch = {
+        messages: [
+          {
+            id: 'msg1',
+            timestamp: new Date(),
+            body: {
+              chatId: 123,
+              messages: [
+                {
+                  username: 'user1',
+                  content: 'message 1',
+                  timestamp: Date.now(),
+                  messageId: 1,
+                  userId: 1
+                }
+              ]
+            },
+            retry: vi.fn(),
+            ack: vi.fn()
+          }
+        ],
+        queue: 'telegram-messages',
+        retryAll: vi.fn(),
+        ackAll: vi.fn()
+      } as any
+
+      await worker.queue(batch, mockEnv, {} as ExecutionContext)
+
+      expect(mockStorage.delete).toHaveBeenCalledWith('processing_123')
+      expect(mockProcessQueuedMessage).toHaveBeenCalled()
+    })
+
+    it('should handle processing errors and retry', async () => {
+      const mockStorage = mockEnv.CHAT_SESSIONS_STORAGE as any
+      vi.mocked(mockStorage.get).mockResolvedValue(null)
+      vi.mocked(mockStorage.put).mockResolvedValue(undefined)
+      vi.mocked(mockStorage.delete).mockResolvedValue(undefined)
+
+      mockProcessQueuedMessage.mockRejectedValueOnce(new Error('Processing error'))
+
+      const message = {
+        id: 'msg1',
+        timestamp: new Date(),
+        body: {
+          chatId: 123,
+          messages: [
+            {
+              username: 'user1',
+              content: 'message 1',
+              timestamp: Date.now(),
+              messageId: 1,
+              userId: 1
+            }
+          ]
+        },
+        retry: vi.fn(),
+        ack: vi.fn()
+      }
+
+      const batch = {
+        messages: [message],
+        queue: 'telegram-messages',
+        retryAll: vi.fn(),
+        ackAll: vi.fn()
+      } as any
+
+      await worker.queue(batch, mockEnv, {} as ExecutionContext)
+
+      expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 5 })
+      expect(message.ack).not.toHaveBeenCalled()
+      expect(mockStorage.delete).toHaveBeenCalledWith('processing_123')
     })
   })
 })
