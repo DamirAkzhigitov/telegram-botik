@@ -23,7 +23,8 @@ vi.mock('../src/api/sessions', () => ({
 
 // Mock processQueuedMessage and dependencies
 vi.mock('../src/bot/processQueuedMessages', () => ({
-  processQueuedMessage: vi.fn().mockResolvedValue(undefined)
+  processQueuedMessage: vi.fn().mockResolvedValue(undefined),
+  processQueuedMessagesBatch: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('../src/gpt', () => ({
   getOpenAIClient: vi.fn().mockReturnValue({
@@ -308,8 +309,8 @@ describe('Worker Entry Point', () => {
 
     beforeEach(async () => {
       vi.clearAllMocks()
-      const { processQueuedMessage } = await import('../src/bot/processQueuedMessages')
-      mockProcessQueuedMessage = vi.mocked(processQueuedMessage)
+      const { processQueuedMessagesBatch } = await import('../src/bot/processQueuedMessages')
+      mockProcessQueuedMessage = vi.mocked(processQueuedMessagesBatch)
       mockProcessQueuedMessage.mockResolvedValue(undefined)
 
       mockEnv = {

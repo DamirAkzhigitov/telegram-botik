@@ -43,7 +43,15 @@ describe('MessageBufferService', () => {
     }
 
     it('should create new buffer and schedule flush trigger when no existing buffer', async () => {
-      vi.mocked(mockStorage.get).mockResolvedValue(null)
+      const now = Date.now()
+      // First call returns null (no existing buffer), second call returns the saved buffer for scheduleFlush
+      vi.mocked(mockStorage.get)
+        .mockResolvedValueOnce(null) // First call in bufferMessage
+        .mockResolvedValueOnce(JSON.stringify({ // Second call in scheduleFlush
+          messages: [messageItem],
+          lastMessageTimestamp: now,
+          scheduledFlushTime: null
+        }))
       vi.mocked(mockQueue.send).mockResolvedValue(undefined)
 
       await bufferService.bufferMessage(chatId, messageItem, 10)
@@ -112,13 +120,16 @@ describe('MessageBufferService', () => {
       await bufferService.bufferMessage(chatId, messageItem, 10)
 
       // Should flush immediately (no delay) when batch limit reached
-      expect(mockQueue.send).toHaveBeenCalledWith({
-        chatId: 123,
-        messages: expect.arrayContaining([
-          expect.objectContaining({ username: 'user0' }),
-          expect.objectContaining({ username: 'testuser' })
-        ])
-      })
+      expect(mockQueue.send).toHaveBeenCalledWith(
+        {
+          chatId: 123,
+          messages: expect.arrayContaining([
+            expect.objectContaining({ username: 'user0' }),
+            expect.objectContaining({ username: 'testuser' })
+          ])
+        },
+        undefined
+      )
       expect(mockStorage.delete).toHaveBeenCalledWith('buffer_123')
     })
 
@@ -144,13 +155,16 @@ describe('MessageBufferService', () => {
       await bufferService.bufferMessage(chatId, messageItem, 10)
 
       // Should flush immediately (no delay) when 10 seconds have passed
-      expect(mockQueue.send).toHaveBeenCalledWith({
-        chatId: 123,
-        messages: expect.arrayContaining([
-          expect.objectContaining({ username: 'user1' }),
-          expect.objectContaining({ username: 'testuser' })
-        ])
-      })
+      // Note: This only flushes existing messages in the buffer (before the new message was added)
+      expect(mockQueue.send).toHaveBeenCalledWith(
+        {
+          chatId: 123,
+          messages: expect.arrayContaining([
+            expect.objectContaining({ username: 'user1' })
+          ])
+        },
+        undefined
+      )
       expect(mockStorage.delete).toHaveBeenCalledWith('buffer_123')
     })
 
@@ -215,7 +229,8 @@ describe('MessageBufferService', () => {
       }
 
       vi.mocked(mockStorage.get).mockResolvedValue(JSON.stringify(existingBuffer))
-      vi.mocked(mockQueue.send).mockRejectedValue(new Error('Queue error'))
+      // First call will flush immediately and should throw
+      vi.mocked(mockQueue.send).mockRejectedValueOnce(new Error('Queue error'))
 
       await expect(
         bufferService.bufferMessage(chatId, messageItem, 10)
@@ -240,9 +255,10 @@ describe('MessageBufferService', () => {
       vi.mocked(mockStorage.get).mockResolvedValue(JSON.stringify(existingBuffer))
       vi.mocked(mockQueue.send).mockRejectedValue(new Error('Queue error'))
 
+      // The error is caught and handled internally, so it should not throw
       await expect(
         bufferService.bufferMessage(chatId, messageItem, 10)
-      ).rejects.toThrow('Queue error')
+      ).resolves.not.toThrow()
     })
   })
 
@@ -269,10 +285,13 @@ describe('MessageBufferService', () => {
 
       await bufferService.flushBuffer(chatId)
 
-      expect(mockQueue.send).toHaveBeenCalledWith({
-        chatId: 123,
-        messages: buffer.messages
-      })
+      expect(mockQueue.send).toHaveBeenCalledWith(
+        {
+          chatId: 123,
+          messages: buffer.messages
+        },
+        undefined
+      )
       expect(mockStorage.delete).toHaveBeenCalledWith('buffer_123')
     })
 

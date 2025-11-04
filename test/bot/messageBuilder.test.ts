@@ -18,7 +18,7 @@ describe('messageBuilder', () => {
       })
 
       expect(res).toEqual([
-        { type: 'input_text', text: 'пользователь alice отправил стикер, далее описание: hello' }
+        { type: 'input_text', text: 'alice: hello' }
       ])
     })
 
@@ -54,7 +54,7 @@ describe('messageBuilder', () => {
         imageInputs
       })
 
-      expect(res[0]).toEqual({ type: 'input_text', text: 'пользователь chris отправил стикер, далее описание: see this' })
+      expect(res[0]).toEqual({ type: 'input_text', text: 'chris: see this' })
       expect(res[1]).toEqual(imageInputs[0])
     })
 
