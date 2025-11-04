@@ -484,7 +484,6 @@ declare abstract class Navigator {
       | Blob
       | FormData
       | URLSearchParams
-      | URLSearchParams
   ): boolean
   readonly userAgent: string
   readonly hardwareConcurrency: number

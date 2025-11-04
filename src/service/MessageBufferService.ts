@@ -83,11 +83,7 @@ export class MessageBufferService {
     }
 
     // Flush if batch limit reached
-    if (buffer.messages.length >= batchLimit) {
-      return true
-    }
-
-    return false
+    return buffer.messages.length >= batchLimit
   }
 
   async bufferMessage(

@@ -93,8 +93,7 @@ export class AdminAuthService {
       const userStr = params.get('user')
       if (!userStr) return null
 
-      const user = JSON.parse(userStr) as TelegramUser
-      return user
+      return JSON.parse(userStr) as TelegramUser
     } catch (error) {
       console.error('Error validating initData:', error)
       return null
