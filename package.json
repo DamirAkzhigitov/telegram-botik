@@ -59,7 +59,7 @@
     "prettier": "3.5.3",
     "prettier-plugin-organize-imports": "^4.2.0",
     "semantic-release": "^25.0.1",
-    "strip-literal": "^2.1.0",
+    "strip-literal": "^3.1.0",
     "tsx": "4.20.6",
     "typescript": "5.5.2",
     "typescript-eslint": "^8.46.2",
