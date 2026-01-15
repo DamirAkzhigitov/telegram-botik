@@ -27,6 +27,7 @@
     "format:check": "prettier . --check",
     "dev:local": "tsx --env-file=.env.local ./src/local-test.ts",
     "test": "vitest",
+    "test:integration": "TEST_INTEGRATION=true vitest run test/integration",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
