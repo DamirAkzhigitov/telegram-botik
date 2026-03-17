@@ -11,7 +11,7 @@ const __dirname = dirname(__filename)
 // Configuration
 const config = {
   dev: {
-    webhookUrl: 'https://better-suitably-monkey.ngrok-free.app',
+    webhookUrl: 'https://yu-sylphy-robustiously.ngrok-free.dev',
     description: 'Development webhook'
   },
   prod: {
