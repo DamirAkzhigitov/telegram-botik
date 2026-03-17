@@ -120,6 +120,8 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/pako@2.1.0/dist/pako.min.js"></script>
+  <script type="module" src="https://unpkg.com/@lottiefiles/dotlottie-wc@0.7.1/dist/dotlottie-wc.js"></script>
   <style>
     * {
       margin: 0;
@@ -314,6 +316,22 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       font-size: 14px;
       width: 100%;
     }
+    .custom-pack-row {
+      margin-top: 8px;
+    }
+    .custom-pack-input {
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+      background: var(--tg-theme-bg-color, #fff);
+      color: var(--tg-theme-text-color, #000);
+      font-size: 14px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .custom-pack-input::placeholder {
+      color: var(--tg-theme-hint-color, #999);
+    }
     .sticker-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -336,7 +354,8 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       border-color: var(--tg-theme-button-color, #3390ec);
       background: rgba(51, 144, 236, 0.1);
     }
-    .sticker-item img {
+    .sticker-item img,
+    .sticker-item video {
       width: 100%;
       height: 100%;
       object-fit: contain;
@@ -349,6 +368,17 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       justify-content: center;
       font-size: 10px;
       color: var(--tg-theme-hint-color, #999);
+    }
+    .sticker-lottie-wrap {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sticker-lottie-wrap dotlottie-wc {
+      width: 100%;
+      height: 100%;
     }
     .generate-btn {
       background: var(--tg-theme-button-color, #3390ec);
@@ -405,13 +435,25 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
 
     function StickerThumbnail({ fileId, authParam, onError }) {
       const [src, setSrc] = React.useState(null);
+      const [lottieUrl, setLottieUrl] = React.useState(null);
+      const [videoUrl, setVideoUrl] = React.useState(null);
       const [error, setError] = React.useState(false);
-      const [isAnimated, setIsAnimated] = React.useState(false);
+      const lottieUrlRef = React.useRef(null);
+      const videoUrlRef = React.useRef(null);
       const baseUrl = window.location.origin;
       useEffect(() => {
+        setSrc(null);
+        setLottieUrl(prev => { if (prev) { URL.revokeObjectURL(prev); } return null; });
+        setVideoUrl(prev => { if (prev) { URL.revokeObjectURL(prev); } return null; });
+        if (lottieUrlRef.current) { URL.revokeObjectURL(lottieUrlRef.current); lottieUrlRef.current = null; }
+        if (videoUrlRef.current) { URL.revokeObjectURL(videoUrlRef.current); videoUrlRef.current = null; }
+        setError(false);
         const url = \`\${baseUrl}/api/sticker-file?file_id=\${encodeURIComponent(fileId)}\${authParam}\`;
-        fetch(url)
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        fetch(url, { signal: controller.signal })
           .then(res => {
+            clearTimeout(timeout);
             if (!res.ok) {
               return res.text().then(t => { throw new Error(\`HTTP \${res.status}: \${t || res.statusText}\`); });
             }
@@ -422,21 +464,73 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
               const reader = new FileReader();
               reader.onloadend = () => setSrc(reader.result);
               reader.readAsDataURL(blob);
-              setIsAnimated(false);
             } else {
-              setIsAnimated(true);
+              blob.arrayBuffer().then(buf => {
+                const bytes = new Uint8Array(buf);
+                const isWebP = bytes.length >= 4 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46;
+                const isTgs = bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+                const pakoLib = (typeof pako !== 'undefined' ? pako : null) || (typeof window !== 'undefined' && window.pako);
+                if (isWebP) {
+                  const webpBlob = new Blob([buf], { type: 'image/webp' });
+                  const reader = new FileReader();
+                  reader.onloadend = () => setSrc(reader.result);
+                  reader.readAsDataURL(webpBlob);
+                } else if (isTgs && pakoLib && pakoLib.ungzip) {
+                  try {
+                    const jsonStr = pakoLib.ungzip(bytes, { to: 'string' });
+                    if (jsonStr && jsonStr.trim().startsWith('{')) {
+                      const lurl = URL.createObjectURL(new Blob([jsonStr], { type: 'application/json' }));
+                      lottieUrlRef.current = lurl;
+                      setLottieUrl(lurl);
+                    } else {
+                      setError(true);
+                    }
+                  } catch (e) {
+                    setError(true);
+                    onError?.('TGS decompress failed');
+                  }
+                } else if (bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
+                  const vurl = URL.createObjectURL(new Blob([buf], { type: 'video/webm' }));
+                  videoUrlRef.current = vurl;
+                  setVideoUrl(vurl);
+                } else {
+                  setError(true);
+                }
+              });
             }
           })
           .catch(err => {
+            clearTimeout(timeout);
             setError(true);
-            const msg = err.message || String(err);
+            const msg = err.name === 'AbortError' ? 'Timeout' : (err.message || String(err));
             onError?.(msg);
             const tg = window.Telegram?.WebApp;
             if (tg?.showAlert) tg.showAlert('Sticker load failed: ' + msg);
           });
+        return () => {
+          if (lottieUrlRef.current) { URL.revokeObjectURL(lottieUrlRef.current); lottieUrlRef.current = null; }
+          if (videoUrlRef.current) { URL.revokeObjectURL(videoUrlRef.current); videoUrlRef.current = null; }
+        };
       }, [fileId]);
       if (error) return <div className="sticker-loading">?</div>;
-      if (isAnimated) return <div className="sticker-loading" title="Animated sticker">🎬</div>;
+      if (lottieUrl) {
+        return (
+          <div className="sticker-lottie-wrap">
+            <dotlottie-wc
+              src={lottieUrl}
+              loop
+              autoplay
+              mode="forward"
+              style={{ width: '100%', height: '100%' }}
+            />
+          </div>
+        );
+      }
+      if (videoUrl) {
+        return (
+          <video src={videoUrl} loop muted autoPlay playsInline />
+        );
+      }
       if (!src) return <div className="sticker-loading">...</div>;
       return <img src={src} alt="" />;
     }
@@ -453,6 +547,7 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       const [stickerPacks, setStickerPacks] = React.useState([]);
       const [stickers, setStickers] = React.useState([]);
       const [selectedPack, setSelectedPack] = React.useState('');
+      const [customPackInput, setCustomPackInput] = React.useState('');
       const [stickersLoading, setStickersLoading] = React.useState(false);
       const [stickerDebug, setStickerDebug] = React.useState({ packs: null, stickers: null, imageErrors: [] });
 
@@ -512,8 +607,9 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
           });
       }, [activeTab]);
 
+      const packToFetch = (customPackInput.trim() || selectedPack);
       useEffect(() => {
-        if (!selectedPack) return;
+        if (!packToFetch) return;
         const tg = window.Telegram?.WebApp;
         const initData = tg?.initData || '';
         if (!initData && !isDevMode()) return;
@@ -521,7 +617,7 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
         setStickerDebug(d => ({ ...d, imageErrors: [] }));
         const baseUrl = window.location.origin;
         const auth = isDevMode() ? 'dev=1' : \`_auth=\${encodeURIComponent(initData)}\`;
-        fetch(\`\${baseUrl}/api/stickers?pack=\${encodeURIComponent(selectedPack)}&\${auth}\`)
+        fetch(\`\${baseUrl}/api/stickers?pack=\${encodeURIComponent(packToFetch)}&\${auth}\`)
           .then(res => res.ok ? res.json() : res.text().then(t => Promise.reject(new Error(\`\${res.status}: \${t}\`))))
           .then(data => {
             setStickers(data.stickers || []);
@@ -533,7 +629,7 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
             setStickerDebug(d => ({ ...d, stickers: 'err: ' + (err.message || err) }));
           })
           .finally(() => setStickersLoading(false));
-      }, [selectedPack]);
+      }, [packToFetch]);
 
       function loadSessions(auth) {
         setSessionsLoading(true);
@@ -640,6 +736,15 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
               >
                 {stickerPacks.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
+              <div className="custom-pack-row">
+                <input
+                  type="text"
+                  className="custom-pack-input"
+                  placeholder="Or enter sticker pack name (e.g. from t.me/addstickers/...)"
+                  value={customPackInput}
+                  onChange={(e) => setCustomPackInput(e.target.value)}
+                />
+              </div>
               {stickersLoading ? (
                 <div className="loading">Loading stickers...</div>
               ) : (

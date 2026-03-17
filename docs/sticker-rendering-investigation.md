@@ -47,8 +47,25 @@ Sticker sets can contain a mix of formats. The file format is determined by the 
 ### Client (`src/index.ts` – `StickerThumbnail`)
 
 - Only render as image when `blob.type === 'image/webp'`.
-- For TGS/WebM, show placeholder (🎬) instead of attempting image render.
+- For TGS: decompress with pako (gzip magic bytes `0x1f 0x8b`), then render via `@lottiefiles/dotlottie-wc` using the `data` attribute (Lottie JSON string).
+- For WebM: detect EBML header (`0x1a 0x45 0xdf 0xa3`), create object URL from blob, render via `<video>` with `loop muted autoPlay playsInline`.
 - Do not force `image/webp` on non-WebP blobs.
+
+### TGS Rendering (dotLottie)
+
+TGS files are gzip-compressed Lottie JSON. To render them:
+
+1. **pako** — Decompress: `pako.ungzip(bytes, { to: 'string' })`.
+2. **dotlottie-wc** — Web component from `@lottiefiles/dotlottie-wc`, accepts `data` (JSON string) or `src` (URL).
+3. Loaded via CDN: `pako@2.1.0`, `@lottiefiles/dotlottie-wc@0.7.1`.
+
+## Case: All Stickers Show "?" (Mar 2026)
+
+**Symptom:** Admin panel Stickers tab showed "?" for every sticker; no images loaded.
+
+**Root cause:** The default sticker packs (`koshachiy_raskolbas`, `gufenpchela`) contain **only WebM (video) stickers**. The client previously showed a placeholder "?" for WebM format.
+
+**Fix:** Added WebM video rendering in `StickerThumbnail`: detect EBML magic bytes, create object URL, render `<video loop muted autoPlay playsInline>`.
 
 ## Debugging Tips
 
