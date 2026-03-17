@@ -1,7 +1,13 @@
 import { authenticateRequest } from './auth'
-import OpenAI from 'openai'
 
-const PROMPT = `We are creating a new sticker pack for Telegram. One image contains an actor (person/character) and the second image contains a sticker. Generate a new image that shows the actor repeating or mimicking the sticker - the actor should be posed and styled to match the sticker's expression, pose, or action. The output should look like a cohesive sticker suitable for a Telegram sticker pack.`
+const PROMPT = `Мы делаем коллецию стикеров для телеграмма. передается фото и стикер. нам нужно объединить и передать идею стикера на первом фото и в результате должна быть только фотография, сам стикер не должен быть повторен на фото, а человек  на фото должен изобразить стикер в живую`
+
+async function fileToDataUrl(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer()
+  const base64 = Buffer.from(buffer).toString('base64')
+  const mime = file.type || 'image/png'
+  return `data:${mime};base64,${base64}`
+}
 
 interface GetFileResponse {
   ok: boolean
@@ -32,9 +38,12 @@ export async function generateSticker(
     })
   }
 
-  if (!env.API_KEY) {
+  const xaiApiKey = env.XAI_API_KEY ?? env.API_KEY
+  if (!xaiApiKey) {
     return new Response(
-      JSON.stringify({ error: 'OpenAI API key not configured' }),
+      JSON.stringify({
+        error: 'xAI API key not configured (XAI_API_KEY or API_KEY)'
+      }),
       {
         status: 503,
         headers: { 'Content-Type': 'application/json' }
@@ -152,18 +161,37 @@ export async function generateSticker(
     })
   }
 
-  const openai = new OpenAI({ apiKey: env.API_KEY })
-
   try {
-    const response = await openai.images.edit({
-      model: 'gpt-image-1.5',
-      image: [actorImage, stickerFile],
-      prompt: PROMPT,
-      output_format: 'png'
+    const [actorDataUrl, stickerDataUrl] = await Promise.all([
+      fileToDataUrl(actorImage),
+      fileToDataUrl(stickerFile)
+    ])
+
+    const editRes = await fetch('https://api.x.ai/v1/images/edits', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${xaiApiKey}`
+      },
+      body: JSON.stringify({
+        model: 'grok-imagine-image',
+        prompt: PROMPT,
+        images: [
+          { url: actorDataUrl, type: 'image_url' },
+          { url: stickerDataUrl, type: 'image_url' }
+        ]
+      })
     })
 
-    const imageData = response.data?.[0]
-    if (!imageData?.b64_json) {
+    if (!editRes.ok) {
+      const errBody = await editRes.text()
+      console.error('xAI edits API error:', editRes.status, errBody)
+      throw new Error(errBody || `xAI API returned ${editRes.status}`)
+    }
+
+    const editData = await editRes.json()
+    const imageUrl = editData.data?.[0]?.url
+    if (!imageUrl) {
       return new Response(
         JSON.stringify({ error: 'Image generation failed' }),
         {
@@ -173,17 +201,22 @@ export async function generateSticker(
       )
     }
 
-    const imageBytes = Buffer.from(imageData.b64_json, 'base64')
+    const imageRes = await fetch(imageUrl)
+    if (!imageRes.ok) {
+      throw new Error(`Failed to fetch generated image: ${imageRes.status}`)
+    }
+    const imageBytes = Buffer.from(await imageRes.arrayBuffer())
+    const contentType = imageRes.headers.get('Content-Type') || 'image/png'
     return new Response(imageBytes, {
       status: 200,
       headers: {
-        'Content-Type': 'image/png',
+        'Content-Type': contentType,
         'Cache-Control': 'no-store',
         'Access-Control-Allow-Origin': '*'
       }
     })
   } catch (err) {
-    console.error('OpenAI image generation error:', err)
+    console.error('Grok image generation error:', err)
     const message = err instanceof Error ? err.message : 'Unknown error'
     return new Response(
       JSON.stringify({ error: `Image generation failed: ${message}` }),

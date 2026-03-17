@@ -72,7 +72,7 @@ export async function getStickers(
 
   const apiUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/getStickerSet?name=${encodeURIComponent(pack)}`
   const res = await fetch(apiUrl)
-  const data = (await res.json()) as GetStickerSetResponse
+  const data = await res.json()
 
   if (!data.ok || !data.result?.stickers) {
     return new Response(
@@ -119,7 +119,7 @@ export async function getStickerFile(
 
   const apiUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/getFile?file_id=${encodeURIComponent(fileId)}`
   const res = await fetch(apiUrl)
-  const data = (await res.json()) as GetFileResponse
+  const data = await res.json()
 
   if (!data.ok || !data.result?.file_path) {
     return new Response('File not found', { status: 404 })
