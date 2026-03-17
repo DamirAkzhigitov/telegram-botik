@@ -138,11 +138,27 @@ export async function getStickerFile(
     return new Response('Failed to fetch file', { status: 502 })
   }
 
-  return new Response(fileRes.body, {
+  const arrayBuffer = await fileRes.arrayBuffer()
+  const ext = data.result.file_path.split('.').pop()?.toLowerCase() ?? ''
+  const contentType =
+    ext === 'webp'
+      ? 'image/webp'
+      : ext === 'tgs'
+        ? 'application/x-tgsticker'
+        : ext === 'webm'
+          ? 'video/webm'
+          : 'application/octet-stream'
+
+  const headers = new Headers({
+    'Content-Type': contentType,
+    'Cache-Control': 'public, max-age=3600',
+    'Access-Control-Allow-Origin': '*',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Sticker-Format': ext
+  })
+
+  return new Response(arrayBuffer, {
     status: 200,
-    headers: {
-      'Content-Type': fileRes.headers.get('Content-Type') || 'image/webp',
-      'Cache-Control': 'public, max-age=3600'
-    }
+    headers
   })
 }

@@ -341,6 +341,15 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       height: 100%;
       object-fit: contain;
     }
+    .sticker-item .sticker-loading {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--tg-theme-hint-color, #999);
+    }
     .generate-btn {
       background: var(--tg-theme-button-color, #3390ec);
       color: var(--tg-theme-button-text-color, #ffffff);
@@ -359,6 +368,30 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
     .generate-btn:not(:disabled):active {
       transform: scale(0.98);
     }
+    .debug-panel {
+      margin-top: 16px;
+      padding: 12px;
+      background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: monospace;
+      color: var(--tg-theme-hint-color, #666);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .debug-panel summary {
+      cursor: pointer;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .dev-banner {
+      background: #f59e0b;
+      color: #000;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
   </style>
 </head>
 <body>
@@ -369,6 +402,44 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
     const { useState, useEffect } = React;
 
     const TABS = { welcome: 'welcome', admin: 'admin', stickers: 'stickers' };
+
+    function StickerThumbnail({ fileId, authParam, onError }) {
+      const [src, setSrc] = React.useState(null);
+      const [error, setError] = React.useState(false);
+      const [isAnimated, setIsAnimated] = React.useState(false);
+      const baseUrl = window.location.origin;
+      useEffect(() => {
+        const url = \`\${baseUrl}/api/sticker-file?file_id=\${encodeURIComponent(fileId)}\${authParam}\`;
+        fetch(url)
+          .then(res => {
+            if (!res.ok) {
+              return res.text().then(t => { throw new Error(\`HTTP \${res.status}: \${t || res.statusText}\`); });
+            }
+            return res.blob();
+          })
+          .then(blob => {
+            if (blob.type === 'image/webp') {
+              const reader = new FileReader();
+              reader.onloadend = () => setSrc(reader.result);
+              reader.readAsDataURL(blob);
+              setIsAnimated(false);
+            } else {
+              setIsAnimated(true);
+            }
+          })
+          .catch(err => {
+            setError(true);
+            const msg = err.message || String(err);
+            onError?.(msg);
+            const tg = window.Telegram?.WebApp;
+            if (tg?.showAlert) tg.showAlert('Sticker load failed: ' + msg);
+          });
+      }, [fileId]);
+      if (error) return <div className="sticker-loading">?</div>;
+      if (isAnimated) return <div className="sticker-loading" title="Animated sticker">🎬</div>;
+      if (!src) return <div className="sticker-loading">...</div>;
+      return <img src={src} alt="" />;
+    }
 
     function App() {
       const [activeTab, setActiveTab] = React.useState(TABS.welcome);
@@ -383,25 +454,31 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       const [stickers, setStickers] = React.useState([]);
       const [selectedPack, setSelectedPack] = React.useState('');
       const [stickersLoading, setStickersLoading] = React.useState(false);
+      const [stickerDebug, setStickerDebug] = React.useState({ packs: null, stickers: null, imageErrors: [] });
+
+      const isDevMode = () => {
+        const host = window.location.hostname || '';
+        const devParam = new URL(window.location.href).searchParams.get('dev');
+        return host === 'localhost' || host === '127.0.0.1' || devParam === '1';
+      };
 
       useEffect(() => {
         const tg = window.Telegram?.WebApp;
-        if (!tg) {
+        if (!tg && !isDevMode()) {
           setError('Telegram Web App not available. Please open this app from Telegram.');
           setLoading(false);
           return;
         }
-
-        tg.ready();
-        tg.expand();
-
-        const initData = tg.initData || '';
-        if (!initData) {
+        if (tg) {
+          tg.ready();
+          tg.expand();
+        }
+        const initData = tg?.initData || '';
+        if (!initData && !isDevMode()) {
           setError('Authentication required. Please open this app from Telegram.');
           setLoading(false);
           return;
         }
-
         setLoading(false);
       }, []);
 
@@ -409,48 +486,60 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
         if (activeTab !== TABS.admin) return;
         const tg = window.Telegram?.WebApp;
         const initData = tg?.initData || '';
-        if (!initData) return;
-        loadSessions(initData);
+        if (!initData && !isDevMode()) return;
+        loadSessions(isDevMode() ? null : initData);
       }, [activeTab]);
 
       useEffect(() => {
         if (activeTab !== TABS.stickers) return;
         const tg = window.Telegram?.WebApp;
         const initData = tg?.initData || '';
-        if (!initData) return;
+        if (!initData && !isDevMode()) return;
         const baseUrl = window.location.origin;
-        fetch(\`\${baseUrl}/api/sticker-packs?_auth=\${encodeURIComponent(initData)}\`)
-          .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load packs')))
+        const auth = isDevMode() ? 'dev=1' : \`_auth=\${encodeURIComponent(initData)}\`;
+        fetch(\`\${baseUrl}/api/sticker-packs?\${auth}\`)
+          .then(res => res.ok ? res.json() : res.text().then(t => Promise.reject(new Error(\`\${res.status}: \${t}\`))))
           .then(data => {
             setStickerPacks(data.packs || []);
+            setStickerDebug(d => ({ ...d, packs: 'ok: ' + (data.packs?.length || 0) + ' packs' }));
             if (data.packs?.length > 0 && !selectedPack) {
               setSelectedPack(data.packs[0]);
             }
           })
-          .catch(() => setStickerPacks([]));
+          .catch(err => {
+            setStickerPacks([]);
+            setStickerDebug(d => ({ ...d, packs: 'err: ' + (err.message || err) }));
+          });
       }, [activeTab]);
 
       useEffect(() => {
         if (!selectedPack) return;
         const tg = window.Telegram?.WebApp;
         const initData = tg?.initData || '';
-        if (!initData) return;
+        if (!initData && !isDevMode()) return;
         setStickersLoading(true);
+        setStickerDebug(d => ({ ...d, imageErrors: [] }));
         const baseUrl = window.location.origin;
-        fetch(\`\${baseUrl}/api/stickers?pack=\${encodeURIComponent(selectedPack)}&_auth=\${encodeURIComponent(initData)}\`)
-          .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load stickers')))
+        const auth = isDevMode() ? 'dev=1' : \`_auth=\${encodeURIComponent(initData)}\`;
+        fetch(\`\${baseUrl}/api/stickers?pack=\${encodeURIComponent(selectedPack)}&\${auth}\`)
+          .then(res => res.ok ? res.json() : res.text().then(t => Promise.reject(new Error(\`\${res.status}: \${t}\`))))
           .then(data => {
             setStickers(data.stickers || []);
             setSelectedSticker(null);
+            setStickerDebug(d => ({ ...d, stickers: 'ok: ' + (data.stickers?.length || 0) + ' stickers' }));
           })
-          .catch(() => setStickers([]))
+          .catch(err => {
+            setStickers([]);
+            setStickerDebug(d => ({ ...d, stickers: 'err: ' + (err.message || err) }));
+          })
           .finally(() => setStickersLoading(false));
       }, [selectedPack]);
 
       function loadSessions(auth) {
         setSessionsLoading(true);
         const baseUrl = window.location.origin;
-        const url = \`\${baseUrl}/api/sessions?_auth=\${encodeURIComponent(auth)}\`;
+        const authParam = auth === null ? 'dev=1' : \`_auth=\${encodeURIComponent(auth)}\`;
+        const url = \`\${baseUrl}/api/sessions?\${authParam}\`;
         
         fetch(url)
           .then(res => {
@@ -521,7 +610,7 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
           const tg = window.Telegram?.WebApp;
           const initData = tg?.initData || '';
           const baseUrl = window.location.origin;
-          const authParam = initData ? \`&_auth=\${encodeURIComponent(initData)}\` : '';
+          const authParam = isDevMode() ? '&dev=1' : (initData ? \`&_auth=\${encodeURIComponent(initData)}\` : '');
           const canGenerate = selectedImage && selectedSticker;
           return (
             <div className="stickers-section">
@@ -561,14 +650,22 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
                       className={\`sticker-item \${selectedSticker?.file_id === s.file_id ? 'selected' : ''}\`}
                       onClick={() => setSelectedSticker(s)}
                     >
-                      <img
-                        src={\`\${baseUrl}/api/sticker-file?file_id=\${encodeURIComponent(s.file_id)}\${authParam}\`}
-                        alt={s.emoji || ''}
+                      <StickerThumbnail
+                        fileId={s.file_id}
+                        authParam={authParam}
+                        onError={(msg) => setStickerDebug(d => ({
+                          ...d,
+                          imageErrors: [...(d.imageErrors || []).slice(-4), msg]
+                        }))}
                       />
                     </div>
                   ))}
                 </div>
               )}
+              <details className="debug-panel">
+                <summary>Debug (tap to expand)</summary>
+                {\`Packs: \${stickerDebug.packs ?? '-'}\nStickers: \${stickerDebug.stickers ?? '-'}\nImage errors: \${stickerDebug.imageErrors?.length ? stickerDebug.imageErrors.join('\\n') : 'none'}\n\nTip: pnpm dev then open /admin?dev=1 in Chrome.\`}
+              </details>
               <button
                 className="generate-btn"
                 disabled={!canGenerate}
@@ -710,6 +807,9 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
 
       return (
         <div className="container">
+          {isDevMode() && (
+            <div className="dev-banner">Dev mode: Open from Telegram for full auth. Use DevTools to debug.</div>
+          )}
           <div className="tabs">
             <button
               className={\`tab \${activeTab === TABS.welcome ? 'active' : ''}\`}
