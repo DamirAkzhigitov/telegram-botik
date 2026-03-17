@@ -133,5 +133,74 @@ describe('authenticateRequest', () => {
       'test=data&more=info'
     )
   })
+
+  describe('dev bypass', () => {
+    it('should bypass auth when dev=1 and request is from localhost', async () => {
+      const url = 'https://localhost:8787/api/sessions?dev=1'
+      const request = new Request(url, {
+        headers: { Host: 'localhost:8787' }
+      })
+
+      const result = await authenticateRequest(request, mockEnv)
+
+      expect(result).not.toBeNull()
+      expect(result?.userId).toBe(0)
+      expect(result?.adminAuthService).toBeDefined()
+      expect(mockAdminAuthService.validateInitData).not.toHaveBeenCalled()
+    })
+
+    it('should bypass auth when dev=1 and Host is 127.0.0.1', async () => {
+      const url = 'https://example.com/api/sessions?dev=1'
+      const request = new Request(url, {
+        headers: { Host: '127.0.0.1:8787' }
+      })
+
+      const result = await authenticateRequest(request, mockEnv)
+
+      expect(result).not.toBeNull()
+      expect(result?.userId).toBe(0)
+      expect(mockAdminAuthService.validateInitData).not.toHaveBeenCalled()
+    })
+
+    it('should bypass auth when dev=1 and Origin is localhost', async () => {
+      const url = 'https://example.com/api/sessions?dev=1'
+      const request = new Request(url, {
+        headers: { Origin: 'http://localhost:3000' }
+      })
+
+      const result = await authenticateRequest(request, mockEnv)
+
+      expect(result).not.toBeNull()
+      expect(result?.userId).toBe(0)
+    })
+
+    it('should not bypass when dev=1 but not from localhost', async () => {
+      const url = 'https://example.com/api/sessions?dev=1'
+      const request = new Request(url, {
+        headers: { Host: 'example.com' }
+      })
+
+      const result = await authenticateRequest(request, mockEnv)
+
+      expect(result).toBeNull()
+      expect(mockAdminAuthService.validateInitData).not.toHaveBeenCalled()
+    })
+
+    it('should bypass when DEV_BYPASS=1 in env', async () => {
+      const envWithBypass = {
+        ...mockEnv,
+        DEV_BYPASS: '1'
+      } as Env
+      const url = 'https://example.com/api/sessions?dev=1'
+      const request = new Request(url, {
+        headers: { Host: 'example.com' }
+      })
+
+      const result = await authenticateRequest(request, envWithBypass)
+
+      expect(result).not.toBeNull()
+      expect(result?.userId).toBe(0)
+    })
+  })
 })
 
