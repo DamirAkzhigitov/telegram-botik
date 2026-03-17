@@ -75,7 +75,7 @@ async function startNgrok() {
 
   const ngrokArgs = [
     'http',
-    '--url=better-suitably-monkey.ngrok-free.app',
+    '--url=yu-sylphy-robustiously.ngrok-free.dev',
     config.wranglerPort.toString()
   ]
 

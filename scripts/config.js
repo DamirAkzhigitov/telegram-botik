@@ -4,7 +4,7 @@
 export const config = {
   // Development environment (ngrok)
   dev: {
-    webhookUrl: 'https://better-suitably-monkey.ngrok-free.app',
+    webhookUrl: 'https://yu-sylphy-robustiously.ngrok-free.dev',
     description: 'Development webhook (ngrok)',
     wranglerPort: 8787,
     ngrokRegion: 'us' // or 'eu', 'au', 'ap', 'sa', 'jp', 'in'
