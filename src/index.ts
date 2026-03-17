@@ -901,10 +901,7 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
                   )}
                 </>
               )}
-              <details className="debug-panel">
-                <summary>Debug (tap to expand)</summary>
-                {\`Packs: \${stickerDebug.packs ?? '-'}\nStickers: \${stickerDebug.stickers ?? '-'}\nImage errors: \${stickerDebug.imageErrors?.length ? stickerDebug.imageErrors.join('\\n') : 'none'}\n\nTip: pnpm dev then open /admin?dev=1 in Chrome.\`}
-              </details>
+             
               {generateError && (
                 <div className="error" style={{ marginTop: '12px' }}>{generateError}</div>
               )}

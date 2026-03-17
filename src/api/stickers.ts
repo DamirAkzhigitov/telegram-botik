@@ -72,9 +72,11 @@ export async function getStickers(
 
   const apiUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/getStickerSet?name=${encodeURIComponent(pack)}`
   const res = await fetch(apiUrl)
-  const data = await res.json()
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- json() returns any, assertion needed for type safety
+  const data = (await res.json()) as GetStickerSetResponse
+  const result = data.result
 
-  if (!data.ok || !data.result?.stickers) {
+  if (!data.ok || !result?.stickers) {
     return new Response(
       JSON.stringify({ error: 'Failed to fetch sticker set' }),
       {
@@ -84,7 +86,7 @@ export async function getStickers(
     )
   }
 
-  const stickers = data.result.stickers.map((s) => ({
+  const stickers = result.stickers.map((s) => ({
     file_id: s.file_id,
     emoji: s.emoji,
     set_name: s.set_name
@@ -119,13 +121,15 @@ export async function getStickerFile(
 
   const apiUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/getFile?file_id=${encodeURIComponent(fileId)}`
   const res = await fetch(apiUrl)
-  const data = await res.json()
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- json() returns any, assertion needed for type safety
+  const data = (await res.json()) as GetFileResponse
+  const result = data.result
 
-  if (!data.ok || !data.result?.file_path) {
+  if (!data.ok || !result?.file_path) {
     return new Response('File not found', { status: 404 })
   }
 
-  const fileUrl = `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${data.result.file_path}`
+  const fileUrl = `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${result.file_path}`
   const fileRes = await fetch(fileUrl)
 
   if (!fileRes.ok) {
@@ -133,7 +137,7 @@ export async function getStickerFile(
   }
 
   const arrayBuffer = await fileRes.arrayBuffer()
-  const ext = data.result.file_path.split('.').pop()?.toLowerCase() ?? ''
+  const ext = result.file_path.split('.').pop()?.toLowerCase() ?? ''
   const contentType =
     ext === 'webp'
       ? 'image/webp'

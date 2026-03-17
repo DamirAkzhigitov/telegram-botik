@@ -1,6 +1,6 @@
 import { authenticateRequest } from './auth'
 
-const PROMPT = `Мы делаем коллецию стикеров для телеграмма. передается фото и стикер. нам нужно объединить и передать идею стикера на первом фото и в результате должна быть только фотография, сам стикер не должен быть повторен на фото, а человек  на фото должен изобразить стикер в живую`
+const PROMPT = `Мы делаем коллецию стикеров для телеграмма. передается фото и стикер. нам нужно объединить и передать идею стикера на первом фото и в результате должна быть только фотография, сам стикер не должен быть повторен на фото, а человек  на фото должен изобразить стикер в живую, если стикер содержит текст то текст так же должен быть повторен на фотографии, фото должо передавать окружение, позу, форму изображенную на стикере, но при этом сохранять черты лица человека на фото. допустимы искажения, допустимо изменение фона или типа одежды, допустимо измнения цветов и прически.`
 
 async function fileToDataUrl(file: File): Promise<string> {
   const buffer = await file.arrayBuffer()
@@ -189,9 +189,11 @@ export async function generateSticker(
       throw new Error(errBody || `xAI API returned ${editRes.status}`)
     }
 
-    const editData = await editRes.json()
+    type XaiEditResponse = { data?: Array<{ url?: string }> }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- json() returns any, assertion needed for type safety
+    const editData = (await editRes.json()) as XaiEditResponse
     const imageUrl = editData.data?.[0]?.url
-    if (!imageUrl) {
+    if (!imageUrl || typeof imageUrl !== 'string') {
       return new Response(
         JSON.stringify({ error: 'Image generation failed' }),
         {
