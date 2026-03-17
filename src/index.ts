@@ -1,10 +1,7 @@
 import { createBot } from './bot/createBot'
 import { getSessions, getSession, getAdminChats } from './api/sessions'
-import {
-  getStickerPacks,
-  getStickers,
-  getStickerFile
-} from './api/stickers'
+import { getStickerPacks, getStickers, getStickerFile } from './api/stickers'
+import { generateSticker } from './api/generateSticker'
 import type { Update } from 'telegraf/types'
 
 export default {
@@ -17,8 +14,11 @@ async function handleUpdate(request: Request, env: Env) {
   const url = new URL(request.url)
   const pathname = url.pathname
 
-  // Handle POST requests for Telegram webhooks
+  // Handle POST requests for API (e.g. generate-sticker) and Telegram webhooks
   if (request.method === 'POST') {
+    if (pathname.startsWith('/api/')) {
+      return handleApiRequest(request, env, pathname)
+    }
     try {
       const bot = createBot(env)
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
@@ -99,6 +99,11 @@ async function handleApiRequest(
   // GET /api/sticker-file?file_id=xxx - Proxy sticker image
   if (pathname === '/api/sticker-file') {
     return getStickerFile(request, env)
+  }
+
+  // POST /api/generate-sticker - Generate sticker from actor image + reference sticker
+  if (pathname === '/api/generate-sticker') {
+    return generateSticker(request, env)
   }
 
   return new Response(JSON.stringify({ error: 'Not Found' }), {
@@ -332,6 +337,45 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
     .custom-pack-input::placeholder {
       color: var(--tg-theme-hint-color, #999);
     }
+    .sticker-mode-toggle {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .sticker-mode-toggle .mode-option {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 2px solid var(--tg-theme-hint-color, #e0e0e0);
+      background: var(--tg-theme-secondary-bg-color, #f8f8f8);
+      cursor: pointer;
+      text-align: center;
+      font-size: 14px;
+    }
+    .sticker-mode-toggle .mode-option.active {
+      border-color: var(--tg-theme-button-color, #3390ec);
+      background: rgba(51, 144, 236, 0.1);
+    }
+    .sticker-mode-toggle .mode-option.disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .sticker-mode-toggle .mode-option input {
+      display: none;
+    }
+    .download-btn {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      background: var(--tg-theme-button-color, #3390ec);
+      color: var(--tg-theme-button-text-color, #fff);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .download-btn:hover {
+      opacity: 0.9;
+    }
     .sticker-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -543,13 +587,21 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       const [sessionsLoading, setSessionsLoading] = React.useState(false);
       const [error, setError] = React.useState(null);
       const [selectedImage, setSelectedImage] = React.useState(null);
+      const [selectedImageFile, setSelectedImageFile] = React.useState(null);
       const [selectedSticker, setSelectedSticker] = React.useState(null);
+      const [generateLoading, setGenerateLoading] = React.useState(false);
+      const [generatedImage, setGeneratedImage] = React.useState(null);
+      const [generatedImageBlob, setGeneratedImageBlob] = React.useState(null);
+      const [generateError, setGenerateError] = React.useState(null);
       const [stickerPacks, setStickerPacks] = React.useState([]);
       const [stickers, setStickers] = React.useState([]);
       const [selectedPack, setSelectedPack] = React.useState('');
       const [customPackInput, setCustomPackInput] = React.useState('');
       const [stickersLoading, setStickersLoading] = React.useState(false);
       const [stickerDebug, setStickerDebug] = React.useState({ packs: null, stickers: null, imageErrors: [] });
+      const [stickerInputMode, setStickerInputMode] = React.useState('upload');
+      const [stickerImageFile, setStickerImageFile] = React.useState(null);
+      const [stickerImagePreview, setStickerImagePreview] = React.useState(null);
 
       const isDevMode = () => {
         const host = window.location.hostname || '';
@@ -707,17 +759,26 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
           const initData = tg?.initData || '';
           const baseUrl = window.location.origin;
           const authParam = isDevMode() ? '&dev=1' : (initData ? \`&_auth=\${encodeURIComponent(initData)}\` : '');
-          const canGenerate = selectedImage && selectedSticker;
+          const useUploadMode = stickerInputMode === 'upload';
+          const canGenerate = useUploadMode
+            ? (selectedImageFile && stickerImageFile && !generateLoading)
+            : (selectedImageFile && selectedSticker && !generateLoading);
           return (
             <div className="stickers-section">
-              <h2>1. Add image</h2>
+              <h2>1. First image (actor)</h2>
               <label className={\`image-upload \${selectedImage ? 'has-image' : ''}\`}>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) setSelectedImage(URL.createObjectURL(file));
+                    if (file) {
+                      setSelectedImage(URL.createObjectURL(file));
+                      setSelectedImageFile(file);
+                      setGeneratedImage(null);
+                      setGeneratedImageBlob(null);
+                      setGenerateError(null);
+                    }
                   }}
                 />
                 {selectedImage ? (
@@ -728,55 +789,186 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
                   </>
                 )}
               </label>
-              <h2>2. Select sticker</h2>
-              <select
-                className="sticker-pack-select"
-                value={selectedPack}
-                onChange={(e) => setSelectedPack(e.target.value)}
-              >
-                {stickerPacks.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-              <div className="custom-pack-row">
-                <input
-                  type="text"
-                  className="custom-pack-input"
-                  placeholder="Or enter sticker pack name (e.g. from t.me/addstickers/...)"
-                  value={customPackInput}
-                  onChange={(e) => setCustomPackInput(e.target.value)}
-                />
+              <h2>2. Reference (sticker or image)</h2>
+              <div className="sticker-mode-toggle">
+                <label className={\`mode-option \${useUploadMode ? 'active' : ''}\`}>
+                  <input
+                    type="radio"
+                    name="stickerMode"
+                    checked={useUploadMode}
+                    onChange={() => {
+                      setStickerInputMode('upload');
+                      setSelectedSticker(null);
+                      setGeneratedImage(null);
+                      setGeneratedImageBlob(null);
+                      setGenerateError(null);
+                    }}
+                  />
+                  Upload image
+                </label>
+                <label className={\`mode-option \${!useUploadMode ? 'active' : ''} disabled\`} title="Coming soon">
+                  <input
+                    type="radio"
+                    name="stickerMode"
+                    checked={!useUploadMode}
+                    disabled
+                    readOnly
+                  />
+                  Select sticker (under development)
+                </label>
               </div>
-              {stickersLoading ? (
-                <div className="loading">Loading stickers...</div>
+              {useUploadMode ? (
+                <label className={\`image-upload \${stickerImagePreview ? 'has-image' : ''}\`}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setStickerImagePreview(URL.createObjectURL(file));
+                        setStickerImageFile(file);
+                        setGeneratedImage(null);
+                        setGeneratedImageBlob(null);
+                        setGenerateError(null);
+                      }
+                    }}
+                  />
+                  {stickerImagePreview ? (
+                    <img src={stickerImagePreview} alt="Reference" className="image-preview" />
+                  ) : (
+                    <span>📷 Upload reference image (sticker style)</span>
+                  )}
+                </label>
               ) : (
-                <div className="sticker-grid">
-                  {stickers.map((s) => (
-                    <div
-                      key={s.file_id}
-                      className={\`sticker-item \${selectedSticker?.file_id === s.file_id ? 'selected' : ''}\`}
-                      onClick={() => setSelectedSticker(s)}
-                    >
-                      <StickerThumbnail
-                        fileId={s.file_id}
-                        authParam={authParam}
-                        onError={(msg) => setStickerDebug(d => ({
-                          ...d,
-                          imageErrors: [...(d.imageErrors || []).slice(-4), msg]
-                        }))}
-                      />
+                <>
+                  <select
+                    className="sticker-pack-select"
+                    value={selectedPack}
+                    onChange={(e) => setSelectedPack(e.target.value)}
+                  >
+                    {stickerPacks.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <div className="custom-pack-row">
+                    <input
+                      type="text"
+                      className="custom-pack-input"
+                      placeholder="Or enter sticker pack name (e.g. from t.me/addstickers/...)"
+                      value={customPackInput}
+                      onChange={(e) => setCustomPackInput(e.target.value)}
+                    />
+                  </div>
+                  {stickersLoading ? (
+                    <div className="loading">Loading stickers...</div>
+                  ) : (
+                    <div className="sticker-grid">
+                      {stickers.map((s) => (
+                        <div
+                          key={s.file_id}
+                          className={\`sticker-item \${selectedSticker?.file_id === s.file_id ? 'selected' : ''}\`}
+                          onClick={() => {
+                            setSelectedSticker(s);
+                            setGeneratedImage(null);
+                            setGeneratedImageBlob(null);
+                            setGenerateError(null);
+                          }}
+                        >
+                          <StickerThumbnail
+                            fileId={s.file_id}
+                            authParam={authParam}
+                            onError={(msg) => setStickerDebug(d => ({
+                              ...d,
+                              imageErrors: [...(d.imageErrors || []).slice(-4), msg]
+                            }))}
+                          />
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
               <details className="debug-panel">
                 <summary>Debug (tap to expand)</summary>
                 {\`Packs: \${stickerDebug.packs ?? '-'}\nStickers: \${stickerDebug.stickers ?? '-'}\nImage errors: \${stickerDebug.imageErrors?.length ? stickerDebug.imageErrors.join('\\n') : 'none'}\n\nTip: pnpm dev then open /admin?dev=1 in Chrome.\`}
               </details>
+              {generateError && (
+                <div className="error" style={{ marginTop: '12px' }}>{generateError}</div>
+              )}
+              {generatedImage && (
+                <div style={{ marginTop: '16px' }}>
+                  <h3>Generated sticker</h3>
+                  <img src={generatedImage} alt="Generated" style={{ maxWidth: '100%', borderRadius: '8px', marginTop: '8px' }} />
+                  <button
+                    type="button"
+                    className="download-btn"
+                    style={{ marginTop: '12px' }}
+                    onClick={async () => {
+                      const blob = generatedImageBlob;
+                      if (!blob) return;
+                      const file = new File([blob], 'sticker.png', { type: 'image/png' });
+                      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+                        try {
+                          await navigator.share({ files: [file], title: 'Generated sticker' });
+                          return;
+                        } catch (e) {
+                          if (e?.name === 'AbortError') return;
+                        }
+                      }
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'sticker.png';
+                      a.style.display = 'none';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    📥 Download / Save to phone
+                  </button>
+                </div>
+              )}
               <button
                 className="generate-btn"
                 disabled={!canGenerate}
-                onClick={() => canGenerate && alert('Generate clicked! Image + sticker ready.')}
+                onClick={async () => {
+                  if (!canGenerate || !selectedImageFile) return;
+                  if (useUploadMode && !stickerImageFile) return;
+                  if (!useUploadMode && !selectedSticker) return;
+                  setGenerateLoading(true);
+                  setGenerateError(null);
+                  setGeneratedImage(null);
+                  setGeneratedImageBlob(null);
+                  try {
+                    const formData = new FormData();
+                    formData.append('actorImage', selectedImageFile);
+                    if (useUploadMode && stickerImageFile) {
+                      formData.append('stickerImage', stickerImageFile);
+                    } else if (selectedSticker) {
+                      formData.append('stickerFileId', selectedSticker.file_id);
+                    }
+                    const baseUrl = window.location.origin;
+                    const auth = isDevMode() ? 'dev=1' : (initData ? \`_auth=\${encodeURIComponent(initData)}\` : '');
+                    const res = await fetch(\`\${baseUrl}/api/generate-sticker?\${auth}\`, {
+                      method: 'POST',
+                      body: formData
+                    });
+                    if (!res.ok) {
+                      const err = await res.json().catch(() => ({ error: res.statusText }));
+                      throw new Error(err.error || \`HTTP \${res.status}\`);
+                    }
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    setGeneratedImage(url);
+                    setGeneratedImageBlob(blob);
+                  } catch (err) {
+                    setGenerateError(err?.message || 'Generation failed');
+                  } finally {
+                    setGenerateLoading(false);
+                  }
+                }}
               >
-                Generate
+                {generateLoading ? 'Generating...' : 'Generate'}
               </button>
             </div>
           );

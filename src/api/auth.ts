@@ -18,11 +18,15 @@ function isLocalhost(request: Request): boolean {
   const referer = request.headers.get('Referer') ?? ''
   const forwardedHost = request.headers.get('X-Forwarded-Host') ?? ''
 
-  const localhostIndicators = [urlHost, hostHeader, origin, referer, forwardedHost]
+  const localhostIndicators = [
+    urlHost,
+    hostHeader,
+    origin,
+    referer,
+    forwardedHost
+  ]
   return localhostIndicators.some(
-    (h) =>
-      h?.includes('localhost') ||
-      h?.includes('127.0.0.1')
+    (h) => h?.includes('localhost') || h?.includes('127.0.0.1')
   )
 }
 
@@ -38,7 +42,8 @@ export async function authenticateRequest(
 
   const devBypass =
     url.searchParams.get('dev') === '1' &&
-    (isLocalhost(request) || (env as { DEV_BYPASS?: string }).DEV_BYPASS === '1')
+    (isLocalhost(request) ||
+      (env as { DEV_BYPASS?: string }).DEV_BYPASS === '1')
 
   if (devBypass) {
     return {
