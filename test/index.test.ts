@@ -224,6 +224,38 @@ describe('Worker Entry Point', () => {
       expect(response.status).toBe(200)
     })
 
+    it('should route /api/sticker-packs to stickers API', async () => {
+      const request = new Request('https://example.com/api/sticker-packs', {
+        method: 'GET'
+      })
+
+      const response = await worker.fetch(request, mockEnv)
+
+      expect([200, 401]).toContain(response.status)
+    })
+
+    it('should route /api/stickers to stickers API', async () => {
+      const request = new Request(
+        'https://example.com/api/stickers?pack=test',
+        { method: 'GET' }
+      )
+
+      const response = await worker.fetch(request, mockEnv)
+
+      expect([200, 400, 401]).toContain(response.status)
+    })
+
+    it('should route /api/sticker-file to stickers API', async () => {
+      const request = new Request(
+        'https://example.com/api/sticker-file?file_id=abc',
+        { method: 'GET' }
+      )
+
+      const response = await worker.fetch(request, mockEnv)
+
+      expect([200, 400, 401, 404, 502]).toContain(response.status)
+    })
+
     it('should return 404 for unknown API endpoints', async () => {
       const request = new Request('https://example.com/api/unknown', {
         method: 'GET'

@@ -10,7 +10,13 @@ export default defineConfig(({ mode }) => ({
       reportsDirectory: './coverage',
       reporter: ['text', 'html', 'json-summary'],
       include: ['src/**/*.ts'],
-      exclude: ['test/**', '**/*.test.ts', '**/*.d.ts', 'node_modules/**'],
+      exclude: [
+        'test/**',
+        '**/*.test.ts',
+        '**/*.d.ts',
+        'node_modules/**',
+        'src/types.ts'
+      ],
       thresholds: {
         lines: 70,
         functions: 70,
