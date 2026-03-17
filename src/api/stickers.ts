@@ -37,16 +37,13 @@ export async function getStickerPacks(
     })
   }
 
-  return new Response(
-    JSON.stringify({ packs: DEFAULT_STICKER_PACKS }),
-    {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
+  return new Response(JSON.stringify({ packs: DEFAULT_STICKER_PACKS }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
     }
-  )
+  })
 }
 
 /**
@@ -67,13 +64,10 @@ export async function getStickers(
   const url = new URL(request.url)
   const pack = url.searchParams.get('pack')
   if (!pack) {
-    return new Response(
-      JSON.stringify({ error: 'Missing pack parameter' }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+    return new Response(JSON.stringify({ error: 'Missing pack parameter' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    })
   }
 
   const apiUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/getStickerSet?name=${encodeURIComponent(pack)}`

@@ -8,11 +8,11 @@ The admin panel (`/admin`) displays sticker thumbnails from Telegram sticker pac
 
 ## Sticker Formats (Telegram Bot API)
 
-| Format | Extension | Content-Type | Renders in `<img>` |
-|--------|-----------|--------------|-------------------|
-| Static | `.webp` | `image/webp` | Yes |
-| Animated | `.tgs` | `application/x-tgsticker` | No (Lottie) |
-| Video | `.webm` | `video/webm` | No |
+| Format   | Extension | Content-Type              | Renders in `<img>` |
+| -------- | --------- | ------------------------- | ------------------ |
+| Static   | `.webp`   | `image/webp`              | Yes                |
+| Animated | `.tgs`    | `application/x-tgsticker` | No (Lottie)        |
+| Video    | `.webm`   | `video/webm`              | No                 |
 
 Sticker sets can contain a mix of formats. The file format is determined by the `file_path` returned from `getFile` (e.g. `stickers/file_123.webp`).
 
@@ -29,6 +29,7 @@ Sticker sets can contain a mix of formats. The file format is determined by the 
 **Symptom:** Pasting the base64 into an online preview tool does not render at all.
 
 **Root causes:**
+
 - **Animated/video stickers:** Client was forcing `type: 'image/webp'` on all blobs. For TGS/WebM files, this created invalid data URLs—the bytes are not WebP, so preview fails.
 - **Streaming:** Passing `fileRes.body` (ReadableStream) through the Worker response may have caused data corruption in some environments.
 
@@ -70,12 +71,14 @@ TGS files are gzip-compressed Lottie JSON. To render them:
 ## Debugging Tips
 
 1. **Check response headers** for `/api/sticker-file`:
+
    - `Content-Type` should match file format.
    - `X-Sticker-Format` shows inferred extension.
 
 2. **Verify file format:** Call `getFile` for a sticker’s `file_id` and inspect `file_path` extension.
 
 3. **Base64 preview:** If it fails, the data may be:
+
    - TGS/WebM (not WebP),
    - Corrupted (try reverting to `arrayBuffer` if streaming was used),
    - Or the wrong MIME type was used when creating the data URL.
