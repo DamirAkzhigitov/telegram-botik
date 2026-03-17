@@ -2,6 +2,7 @@ import { createBot } from './bot/createBot'
 import { getSessions, getSession, getAdminChats } from './api/sessions'
 import { getStickerPacks, getStickers, getStickerFile } from './api/stickers'
 import { generateSticker } from './api/generateSticker'
+import { sendStickerToUser } from './api/sendStickerToUser'
 import type { Update } from 'telegraf/types'
 
 export default {
@@ -104,6 +105,11 @@ async function handleApiRequest(
   // POST /api/generate-sticker - Generate sticker from actor image + reference sticker
   if (pathname === '/api/generate-sticker') {
     return generateSticker(request, env)
+  }
+
+  // POST /api/send-sticker-to-user - Send generated sticker to user's Telegram chat
+  if (pathname === '/api/send-sticker-to-user') {
+    return sendStickerToUser(request, env)
   }
 
   return new Response(JSON.stringify({ error: 'Not Found' }), {
@@ -363,7 +369,7 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
     .sticker-mode-toggle .mode-option input {
       display: none;
     }
-    .download-btn {
+    .send-telegram-btn {
       padding: 10px 16px;
       border-radius: 8px;
       border: none;
@@ -373,8 +379,15 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       font-weight: 500;
       cursor: pointer;
     }
-    .download-btn:hover {
+    .send-telegram-btn:hover:not(:disabled) {
       opacity: 0.9;
+    }
+    .send-telegram-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .send-success {
+      color: var(--tg-theme-button-color, #3390ec);
     }
     .sticker-grid {
       display: grid;
@@ -592,6 +605,8 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       const [generateLoading, setGenerateLoading] = React.useState(false);
       const [generatedImage, setGeneratedImage] = React.useState(null);
       const [generatedImageBlob, setGeneratedImageBlob] = React.useState(null);
+      const [sendToTelegramLoading, setSendToTelegramLoading] = React.useState(false);
+      const [sendToTelegramMessage, setSendToTelegramMessage] = React.useState(null);
       const [generateError, setGenerateError] = React.useState(null);
       const [stickerPacks, setStickerPacks] = React.useState([]);
       const [stickers, setStickers] = React.useState([]);
@@ -899,33 +914,42 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
                   <img src={generatedImage} alt="Generated" style={{ maxWidth: '100%', borderRadius: '8px', marginTop: '8px' }} />
                   <button
                     type="button"
-                    className="download-btn"
+                    className="send-telegram-btn"
                     style={{ marginTop: '12px' }}
+                    disabled={sendToTelegramLoading}
                     onClick={async () => {
                       const blob = generatedImageBlob;
                       if (!blob) return;
-                      const file = new File([blob], 'sticker.png', { type: 'image/png' });
-                      if (navigator.share && navigator.canShare?.({ files: [file] })) {
-                        try {
-                          await navigator.share({ files: [file], title: 'Generated sticker' });
-                          return;
-                        } catch (e) {
-                          if (e?.name === 'AbortError') return;
+                      setSendToTelegramLoading(true);
+                      setSendToTelegramMessage(null);
+                      try {
+                        const formData = new FormData();
+                        formData.append('image', new File([blob], 'sticker.png', { type: 'image/png' }));
+                        const baseUrl = window.location.origin;
+                        const auth = isDevMode() ? 'dev=1' : (initData ? \`_auth=\${encodeURIComponent(initData)}\` : '');
+                        const res = await fetch(\`\${baseUrl}/api/send-sticker-to-user?\${auth}\`, {
+                          method: 'POST',
+                          body: formData
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) {
+                          throw new Error(data.error || \`HTTP \${res.status}\`);
                         }
+                        setSendToTelegramMessage('Sent! Check your Telegram chat.');
+                      } catch (err) {
+                        setSendToTelegramMessage(err?.message || 'Failed to send');
+                      } finally {
+                        setSendToTelegramLoading(false);
                       }
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'sticker.png';
-                      a.style.display = 'none';
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
                     }}
                   >
-                    📥 Download / Save to phone
+                    {sendToTelegramLoading ? 'Sending...' : '📤 Send to Telegram'}
                   </button>
+                  {sendToTelegramMessage && (
+                    <div className={sendToTelegramMessage.startsWith('Sent') ? 'send-success' : 'error'} style={{ marginTop: '8px', fontSize: '14px' }}>
+                      {sendToTelegramMessage}
+                    </div>
+                  )}
                 </div>
               )}
               <button
@@ -939,6 +963,7 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
                   setGenerateError(null);
                   setGeneratedImage(null);
                   setGeneratedImageBlob(null);
+                  setSendToTelegramMessage(null);
                   try {
                     const formData = new FormData();
                     formData.append('actorImage', selectedImageFile);
