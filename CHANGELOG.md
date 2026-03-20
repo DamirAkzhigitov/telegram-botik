@@ -1,3 +1,9 @@
+# [1.2.0](https://github.com/DamirAkzhigitov/telegram-botik/compare/v1.1.0...v1.2.0) (2026-03-20)
+
+### Features
+
+- new image generation ([c64436e](https://github.com/DamirAkzhigitov/telegram-botik/commit/c64436e96bd9d49a1a5b5fa9afce8843959d4d92))
+
 # 1.0.0 (2025-11-03)
 
 ### Bug Fixes
