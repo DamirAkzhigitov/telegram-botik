@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { getOpenAIClient } from '../src/gpt'
+import { getOpenAIClient, mind } from '../src/gpt'
 
 const mockResponse = vi.fn()
 
@@ -124,7 +124,14 @@ describe('BotService', () => {
 
     expect(mockResponse).toHaveBeenCalled()
     const callArgs = mockResponse.mock.calls[0][0]
-    expect(callArgs.input.some((item: any) => item.content === 'custom prompt')).toBe(true)
+    expect(callArgs.input.some((item: any) => item.content === mind)).toBe(true)
+    expect(
+      callArgs.input.some(
+        (item: any) =>
+          typeof item.content === 'string' &&
+          item.content.includes('custom prompt')
+      )
+    ).toBe(true)
 
     consoleSpy.mockRestore()
   })
