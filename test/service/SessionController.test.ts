@@ -43,8 +43,12 @@ describe('SessionController', () => {
         chat_settings: {
           thread_id: undefined,
           reply_only_in_thread: false,
-          send_message_option: {}
-        }
+          directed_reply_gating: false,
+          send_message_option: {},
+          proactive_enabled: false
+        },
+        thread_activity: {},
+        proactive_pending: {}
       })
     })
 
@@ -113,8 +117,34 @@ describe('SessionController', () => {
       const result = await sessionController.getSession(456)
 
       expect(mockStorage.get).toHaveBeenCalledWith('session_456')
-      expect(result).toEqual(storedSession)
-      expect(sessionController.session).toEqual(storedSession)
+      const withActivity = {
+        ...storedSession,
+        thread_activity: {},
+        proactive_pending: {}
+      }
+      expect(result).toEqual(withActivity)
+      expect(sessionController.session).toEqual(withActivity)
+    })
+
+    it('should add thread_activity if missing', async () => {
+      const stored: Partial<SessionData> = {
+        userMessages: [],
+        stickersPacks: ['pack1'],
+        prompt: '',
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        toggle_history: true,
+        model: DEFAULT_TEXT_MODEL,
+        chat_settings: {},
+        memories: []
+      }
+
+      vi.mocked(mockStorage.get).mockResolvedValue(JSON.stringify(stored))
+
+      const result = await sessionController.getSession(8001)
+
+      expect(result.thread_activity).toEqual({})
     })
 
     it('should add memories array if missing', async () => {
@@ -284,6 +314,44 @@ describe('SessionController', () => {
       expect(sessionController.session.firstTime).toBe(false)
     })
 
+    it('should deep-merge thread_activity', async () => {
+      sessionController.session.thread_activity = {
+        __default: { lastActivityAt: '2020-01-01T00:00:00.000Z' },
+        '7': { lastActivityAt: '2020-02-01T00:00:00.000Z' }
+      }
+
+      await sessionController.updateSession(888, {
+        thread_activity: {
+          '7': { lastActivityAt: '2025-03-20T12:00:00.000Z' }
+        }
+      })
+
+      expect(sessionController.session.thread_activity).toEqual({
+        __default: { lastActivityAt: '2020-01-01T00:00:00.000Z' },
+        '7': { lastActivityAt: '2025-03-20T12:00:00.000Z' }
+      })
+    })
+
+    it('should deep-merge chat_settings', async () => {
+      sessionController.session.chat_settings = {
+        thread_id: 5,
+        reply_only_in_thread: true,
+        directed_reply_gating: false,
+        send_message_option: { message_thread_id: 5 }
+      }
+
+      await sessionController.updateSession(888, {
+        chat_settings: { directed_reply_gating: true }
+      })
+
+      expect(sessionController.session.chat_settings).toEqual({
+        thread_id: 5,
+        reply_only_in_thread: true,
+        directed_reply_gating: true,
+        send_message_option: { message_thread_id: 5 }
+      })
+    })
+
     it('should handle storage put errors gracefully', async () => {
       vi.mocked(mockStorage.put).mockRejectedValue(
         new Error('Storage error')
@@ -351,6 +419,72 @@ describe('SessionController', () => {
         `session_${chatId}`,
         expect.any(String)
       )
+    })
+  })
+
+  describe('touchThreadActivity', () => {
+    it('should merge a thread key without dropping others', async () => {
+      sessionController.session.thread_activity = {
+        __default: { lastActivityAt: '2020-01-01T00:00:00.000Z' }
+      }
+      const at = new Date('2025-06-15T10:30:00.000Z')
+
+      await sessionController.touchThreadActivity(9000, '42', at)
+
+      expect(sessionController.session.thread_activity).toEqual({
+        __default: { lastActivityAt: '2020-01-01T00:00:00.000Z' },
+        '42': { lastActivityAt: '2025-06-15T10:30:00.000Z' }
+      })
+      expect(mockStorage.put).toHaveBeenCalled()
+    })
+  })
+
+  describe('proactive_pending', () => {
+    it('deep-merges proactive_pending in updateSession', async () => {
+      sessionController.session.proactive_pending = {
+        __default: { sentAt: '2020-01-01T00:00:00.000Z' }
+      }
+
+      await sessionController.updateSession(888, {
+        proactive_pending: {
+          '7': { sentAt: '2025-01-01T00:00:00.000Z' }
+        }
+      })
+
+      expect(sessionController.session.proactive_pending).toEqual({
+        __default: { sentAt: '2020-01-01T00:00:00.000Z' },
+        '7': { sentAt: '2025-01-01T00:00:00.000Z' }
+      })
+    })
+
+    it('removeProactivePendingKey removes one bucket', async () => {
+      const stored = {
+        ...sessionController.session,
+        proactive_pending: {
+          __default: { sentAt: 'a' },
+          '7': { sentAt: 'b' }
+        }
+      }
+      vi.mocked(mockStorage.get).mockResolvedValue(JSON.stringify(stored))
+
+      await sessionController.removeProactivePendingKey(100, '__default')
+
+      expect(sessionController.session.proactive_pending).toEqual({
+        '7': { sentAt: 'b' }
+      })
+    })
+
+    it('setProactivePendingKey adds a bucket', async () => {
+      vi.mocked(mockStorage.get).mockResolvedValue(
+        JSON.stringify(sessionController.session)
+      )
+      const at = new Date('2025-06-01T12:00:00.000Z')
+
+      await sessionController.setProactivePendingKey(200, '3', at)
+
+      expect(sessionController.session.proactive_pending).toMatchObject({
+        '3': { sentAt: at.toISOString() }
+      })
     })
   })
 

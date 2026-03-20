@@ -9,6 +9,27 @@ interface ResponseDispatcherDeps {
   sessionData: SessionData
   userService: UserService
   env: Env
+  /**
+   * undefined: use session `send_message_option` only (legacy).
+   * number: directed mode — send in this forum topic.
+   * null: directed mode but trigger had no topic — strip fixed `message_thread_id` from options.
+   */
+  outboundMessageThreadId?: number | null
+}
+
+export function resolveSendExtras(
+  sessionData: SessionData,
+  outboundMessageThreadId: number | null | undefined
+): Record<string, unknown> {
+  const base = {
+    ...(sessionData.chat_settings.send_message_option ?? {})
+  } as Record<string, unknown>
+  if (outboundMessageThreadId === undefined) return base
+  if (outboundMessageThreadId === null) {
+    const { message_thread_id: _t, ...rest } = base
+    return rest
+  }
+  return { ...base, message_thread_id: outboundMessageThreadId }
 }
 
 export const dispatchResponsesSequentially = async (
@@ -16,6 +37,11 @@ export const dispatchResponsesSequentially = async (
   deps: ResponseDispatcherDeps
 ) => {
   if (!deps.ctx.chat) return
+
+  const sendExtras = resolveSendExtras(
+    deps.sessionData,
+    deps.outboundMessageThreadId
+  )
 
   for (const { content, type } of responses) {
     if (type === 'emoji') {
@@ -29,24 +55,24 @@ export const dispatchResponsesSequentially = async (
         log: 'sendSticker',
         chatId: deps.ctx.chat.id,
         content: stickerByEmoji.file_id,
-        send_message_option: deps.sessionData.chat_settings.send_message_option
+        send_message_option: sendExtras
       })
 
       await deps.ctx.telegram.sendSticker(
         deps.ctx.chat.id,
         stickerByEmoji.file_id,
-        deps.sessionData.chat_settings.send_message_option
+        sendExtras
       )
     } else if (type === 'text') {
       console.log({
         log: 'sendMessage',
         chatId: deps.ctx.chat.id,
         content,
-        send_message_option: deps.sessionData.chat_settings.send_message_option
+        send_message_option: sendExtras
       })
 
       await deps.ctx.telegram.sendMessage(deps.ctx.chat.id, content, {
-        ...deps.sessionData.chat_settings.send_message_option,
+        ...sendExtras,
         parse_mode: 'Markdown'
       })
     } else if (type === 'reaction') {
@@ -87,7 +113,13 @@ export const dispatchResponsesSequentially = async (
       form.append('chat_id', String(deps.ctx.chat.id))
       form.append('photo', file)
 
-      if (deps.sessionData.chat_settings.thread_id) {
+      const tid = sendExtras.message_thread_id
+      if (typeof tid === 'number') {
+        form.append('message_thread_id', String(tid))
+      } else if (
+        deps.outboundMessageThreadId === undefined &&
+        deps.sessionData.chat_settings.thread_id
+      ) {
         form.append(
           'message_thread_id',
           String(deps.sessionData.chat_settings.thread_id)

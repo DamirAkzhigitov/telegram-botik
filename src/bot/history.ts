@@ -1,5 +1,7 @@
 import OpenAI from 'openai'
 import type { MessagesArray, SessionData } from '../types'
+import type { EmbeddingService } from '../service/EmbeddingService'
+import type { SessionController } from '../service/SessionController'
 import { IMAGE_PLACEHOLDER_TEXT } from './constants'
 import { DEFAULT_TEXT_MODEL } from '../constants/models'
 
@@ -136,5 +138,61 @@ ${conversationText}
   } catch (error) {
     console.error('Error creating conversation summary:', error)
     throw error
+  }
+}
+
+/** Writes conversation turns to session storage (and runs rolling summary when enabled). */
+export async function persistConversationHistory(options: {
+  chatId: string | number
+  messages: SessionData['userMessages']
+  toggleHistory: boolean
+  sessionController: SessionController
+  embeddingService: EmbeddingService
+  openai: OpenAI
+  model?: string
+}): Promise<void> {
+  const {
+    chatId,
+    messages,
+    toggleHistory,
+    sessionController,
+    embeddingService,
+    openai,
+    model
+  } = options
+
+  if (!toggleHistory) return
+
+  const sanitizedForStorage = sanitizeHistoryMessages(messages)
+
+  if (sanitizedForStorage.length >= 20) {
+    const messagesToSummarize = sanitizedForStorage.slice(-20)
+
+    try {
+      const summaryText = await createConversationSummary(
+        messagesToSummarize,
+        openai,
+        model
+      )
+
+      await embeddingService.saveSummary(Number(chatId), summaryText)
+
+      const summaryMessage = createSummaryMessage(summaryText)
+      const remainingMessages = sanitizedForStorage.slice(0, -20)
+      const newHistory = [...remainingMessages, ...summaryMessage]
+
+      await sessionController.updateSession(chatId, {
+        userMessages: newHistory
+      })
+    } catch (error) {
+      console.error('Error creating summary:', error)
+      await sessionController.updateSession(chatId, {
+        userMessages: sanitizedForStorage.slice(-20)
+      })
+    }
+  } else {
+    await sessionController.updateSession(chatId, {
+      userMessages: sanitizedForStorage
+    })
   }
 }

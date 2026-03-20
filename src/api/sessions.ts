@@ -1,5 +1,6 @@
 import { authenticateRequest } from './auth'
 import { SessionController } from '../service/SessionController'
+import type { ChatSettings, Memory, SessionData } from '../types'
 
 interface SessionSummary {
   chatId: string
@@ -104,6 +105,185 @@ export async function getSession(
 
   // Get session data
   const sessionController = new SessionController(env)
+  const session = await sessionController.getSession(chatId)
+  const chatInfo = await adminAuthService.getChatInfo(chatId)
+
+  return new Response(
+    JSON.stringify({
+      chatId,
+      chatInfo,
+      session
+    }),
+    {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
+    }
+  )
+}
+
+function parseSessionPatch(
+  body: unknown
+): { ok: true; patch: Partial<SessionData> } | { ok: false; error: string } {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { ok: false, error: 'Expected JSON object' }
+  }
+  const raw = body as Record<string, unknown>
+  const patch: Partial<SessionData> = {}
+
+  if ('model' in raw) {
+    if (raw.model != null && typeof raw.model !== 'string') {
+      return { ok: false, error: 'model must be a string' }
+    }
+    if (raw.model !== undefined) {
+      patch.model = raw.model as SessionData['model']
+    }
+  }
+
+  if ('prompt' in raw) {
+    if (typeof raw.prompt !== 'string') {
+      return { ok: false, error: 'prompt must be a string' }
+    }
+    patch.prompt = raw.prompt
+  }
+
+  if ('stickersPacks' in raw) {
+    if (!Array.isArray(raw.stickersPacks)) {
+      return { ok: false, error: 'stickersPacks must be an array' }
+    }
+    if (!raw.stickersPacks.every((p) => typeof p === 'string')) {
+      return { ok: false, error: 'stickersPacks must be strings' }
+    }
+    patch.stickersPacks = raw.stickersPacks
+  }
+
+  if ('toggle_history' in raw) {
+    if (typeof raw.toggle_history !== 'boolean') {
+      return { ok: false, error: 'toggle_history must be a boolean' }
+    }
+    patch.toggle_history = raw.toggle_history
+  }
+
+  if ('firstTime' in raw) {
+    if (typeof raw.firstTime !== 'boolean') {
+      return { ok: false, error: 'firstTime must be a boolean' }
+    }
+    patch.firstTime = raw.firstTime
+  }
+
+  if ('promptNotSet' in raw) {
+    if (typeof raw.promptNotSet !== 'boolean') {
+      return { ok: false, error: 'promptNotSet must be a boolean' }
+    }
+    patch.promptNotSet = raw.promptNotSet
+  }
+
+  if ('stickerNotSet' in raw) {
+    if (typeof raw.stickerNotSet !== 'boolean') {
+      return { ok: false, error: 'stickerNotSet must be a boolean' }
+    }
+    patch.stickerNotSet = raw.stickerNotSet
+  }
+
+  if ('chat_settings' in raw) {
+    if (
+      !raw.chat_settings ||
+      typeof raw.chat_settings !== 'object' ||
+      Array.isArray(raw.chat_settings)
+    ) {
+      return { ok: false, error: 'chat_settings must be an object' }
+    }
+    patch.chat_settings = raw.chat_settings as ChatSettings
+  }
+
+  if ('memories' in raw) {
+    if (!Array.isArray(raw.memories)) {
+      return { ok: false, error: 'memories must be an array' }
+    }
+    const memories: Memory[] = []
+    for (const item of raw.memories) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return { ok: false, error: 'Each memory must be an object' }
+      }
+      const m = item as Record<string, unknown>
+      if (typeof m.content !== 'string') {
+        return { ok: false, error: 'Each memory needs a string content' }
+      }
+      const timestamp =
+        typeof m.timestamp === 'string' ? m.timestamp : new Date().toISOString()
+      memories.push({ content: m.content, timestamp })
+    }
+    patch.memories = memories
+  }
+
+  if ('userMessages' in raw) {
+    if (!Array.isArray(raw.userMessages)) {
+      return { ok: false, error: 'userMessages must be an array' }
+    }
+    patch.userMessages = raw.userMessages as SessionData['userMessages']
+  }
+
+  return { ok: true, patch }
+}
+
+/**
+ * PATCH /api/sessions/:chatId — merge partial session fields (admin only)
+ */
+export async function patchSession(
+  request: Request,
+  env: Env,
+  chatId: string
+): Promise<Response> {
+  const auth = await authenticateRequest(request, env)
+  if (!auth) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const { userId, adminAuthService } = auth
+  const isAdmin = await adminAuthService.verifyAdminStatus(chatId, userId)
+  if (!isAdmin) {
+    return new Response(JSON.stringify({ error: 'Forbidden' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const parsed = parseSessionPatch(body)
+  if (!parsed.ok) {
+    return new Response(JSON.stringify({ error: parsed.error }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  if (Object.keys(parsed.patch).length === 0) {
+    return new Response(
+      JSON.stringify({ error: 'No valid fields to update' }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
+  }
+
+  const sessionController = new SessionController(env)
+  await sessionController.getSession(chatId)
+  await sessionController.updateSession(chatId, parsed.patch)
   const session = await sessionController.getSession(chatId)
   const chatInfo = await adminAuthService.getChatInfo(chatId)
 

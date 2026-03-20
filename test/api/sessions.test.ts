@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { getSessions, getSession, getAdminChats } from '../../src/api/sessions'
+import {
+  getSessions,
+  getSession,
+  getAdminChats,
+  patchSession
+} from '../../src/api/sessions'
 import { authenticateRequest } from '../../src/api/auth'
 import { SessionController } from '../../src/service/SessionController'
 import { AdminAuthService } from '../../src/service/AdminAuthService'
@@ -32,7 +37,8 @@ describe('API Sessions', () => {
     }
 
     mockSessionController = {
-      getSession: vi.fn()
+      getSession: vi.fn(),
+      updateSession: vi.fn()
     }
 
     ;(AdminAuthService as any).mockImplementation(() => mockAdminAuthService)
@@ -331,6 +337,100 @@ describe('API Sessions', () => {
       const response = await getSession(mockRequest, mockEnv, '123')
 
       expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    })
+  })
+
+  describe('patchSession', () => {
+    it('should return 401 when not authenticated', async () => {
+      ;(authenticateRequest as any).mockResolvedValueOnce(null)
+      mockRequest = new Request('https://example.com/api/sessions/123?_auth=test', {
+        method: 'PATCH',
+        body: JSON.stringify({ prompt: 'x' })
+      })
+
+      const response = await patchSession(mockRequest, mockEnv, '123')
+
+      expect(response.status).toBe(401)
+    })
+
+    it('should return 403 when user is not admin', async () => {
+      ;(authenticateRequest as any).mockResolvedValueOnce({
+        userId: 123,
+        adminAuthService: mockAdminAuthService
+      })
+      mockAdminAuthService.verifyAdminStatus.mockResolvedValueOnce(false)
+      mockRequest = new Request('https://example.com/api/sessions/456?_auth=test', {
+        method: 'PATCH',
+        body: JSON.stringify({ prompt: 'x' })
+      })
+
+      const response = await patchSession(mockRequest, mockEnv, '456')
+
+      expect(response.status).toBe(403)
+    })
+
+    it('should return 400 for empty patch', async () => {
+      ;(authenticateRequest as any).mockResolvedValueOnce({
+        userId: 123,
+        adminAuthService: mockAdminAuthService
+      })
+      mockAdminAuthService.verifyAdminStatus.mockResolvedValueOnce(true)
+      mockRequest = new Request('https://example.com/api/sessions/123?_auth=test', {
+        method: 'PATCH',
+        body: JSON.stringify({ unknown: 1 })
+      })
+
+      const response = await patchSession(mockRequest, mockEnv, '123')
+
+      expect(response.status).toBe(400)
+      const body = await response.json()
+      expect(body.error).toBe('No valid fields to update')
+    })
+
+    it('should merge patch and return updated session', async () => {
+      ;(authenticateRequest as any).mockResolvedValueOnce({
+        userId: 123,
+        adminAuthService: mockAdminAuthService
+      })
+      mockAdminAuthService.verifyAdminStatus.mockResolvedValueOnce(true)
+
+      const before = {
+        model: 'gpt-4.1-mini',
+        prompt: 'old',
+        stickersPacks: ['a'],
+        memories: [],
+        userMessages: [],
+        toggle_history: true,
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        chat_settings: {}
+      }
+      const after = { ...before, prompt: 'new prompt' }
+
+      mockSessionController.getSession
+        .mockResolvedValueOnce(before)
+        .mockResolvedValueOnce(after)
+      mockSessionController.updateSession.mockResolvedValueOnce(undefined)
+      mockAdminAuthService.getChatInfo.mockResolvedValueOnce({
+        id: 123,
+        title: 'T',
+        type: 'group'
+      })
+
+      mockRequest = new Request('https://example.com/api/sessions/123?_auth=test', {
+        method: 'PATCH',
+        body: JSON.stringify({ prompt: 'new prompt' })
+      })
+
+      const response = await patchSession(mockRequest, mockEnv, '123')
+
+      expect(response.status).toBe(200)
+      expect(mockSessionController.updateSession).toHaveBeenCalledWith('123', {
+        prompt: 'new prompt'
+      })
+      const body = await response.json()
+      expect(body.session.prompt).toBe('new prompt')
     })
   })
 

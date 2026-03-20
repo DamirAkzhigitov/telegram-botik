@@ -20,6 +20,7 @@ Core worker logic stays in `src/`, with `src/index.ts` dispatching requests and 
 
 - `pnpm test` – run Vitest (add `--watch` when iterating).
 - `pnpm test:coverage` – run Vitest with coverage report.
+- `pnpm test:e2e` – webhook → Telegraf → message handler pipeline (local Telegram API stub + mocked LLM/embeddings); see `test/e2e/webhook-message.test.ts`.
 
 ### Code Quality
 

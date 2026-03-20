@@ -15,14 +15,23 @@ import {
 import {
   sanitizeHistoryMessages,
   buildAssistantHistoryMessages,
-  createConversationSummary,
-  createSummaryMessage
+  persistConversationHistory
 } from './history'
 import { collectImageInputs } from './media'
 import { ensureSessionReady } from './sessionGuards'
-import { dispatchResponsesSequentially } from './responseDispatcher'
+import {
+  dispatchResponsesSequentially,
+  resolveSendExtras
+} from './responseDispatcher'
 import { delay } from '../utils'
 import { BOT_NAME } from './constants'
+import { resolveShouldReplyDirected } from './addressed'
+import { resolveThreadActivityKey } from './threadActivity'
+import {
+  extractBackgroundMemories,
+  formatRecentHistoryForObserver,
+  plainTextFromHistoryMessage
+} from './memoryObserver'
 import type { RecordMetadata } from '@pinecone-database/pinecone'
 
 type ResponseApi = (
@@ -47,11 +56,25 @@ interface MessageHandlerDeps {
   openai: OpenAI
 }
 
+function logIncomingMessageCtx(ctx: Context) {
+  const m = ctx.message
+  console.log('incoming message', {
+    chatId: ctx.chat?.id,
+    chatType: ctx.chat?.type,
+    messageId: m && 'message_id' in m ? m.message_id : undefined,
+    threadId: m && 'message_thread_id' in m ? m.message_thread_id : undefined,
+    fromId: m && 'from' in m ? m.from?.id : undefined,
+    hasText: Boolean(
+      m && 'text' in m && typeof (m as { text?: string }).text === 'string'
+    )
+  })
+}
+
 export const handleIncomingMessage = async (
   ctx: Context,
   deps: MessageHandlerDeps
 ) => {
-  console.log('ctx: ', JSON.stringify(ctx, null, 2))
+  logIncomingMessageCtx(ctx)
   if (ctx.message?.from?.is_bot) return
 
   if (!ctx.message?.from) return
@@ -72,9 +95,50 @@ export const handleIncomingMessage = async (
 
   const sessionData = await deps.sessionController.getSession(chatId)
 
-  const shouldReply = sessionData.chat_settings.reply_only_in_thread
-    ? ctx.message?.message_thread_id === sessionData.chat_settings.thread_id
-    : true
+  await deps.sessionController.touchThreadActivity(
+    chatId,
+    resolveThreadActivityKey(ctx)
+  )
+
+  await deps.sessionController.removeProactivePendingKey(
+    chatId,
+    resolveThreadActivityKey(ctx)
+  )
+
+  if (
+    ctx.chat?.type === 'supergroup' &&
+    'is_forum' in ctx.chat &&
+    ctx.chat.is_forum === true &&
+    sessionData.is_forum_supergroup !== true
+  ) {
+    await deps.sessionController.updateSession(chatId, {
+      is_forum_supergroup: true
+    })
+  }
+
+  const directedOn = Boolean(sessionData.chat_settings.directed_reply_gating)
+
+  const shouldReply = directedOn
+    ? await resolveShouldReplyDirected(ctx, deps.openai)
+    : sessionData.chat_settings.reply_only_in_thread
+      ? ctx.message?.message_thread_id === sessionData.chat_settings.thread_id
+      : true
+
+  const historyThreadPrefix =
+    directedOn &&
+    ctx.message &&
+    'message_thread_id' in ctx.message &&
+    typeof ctx.message.message_thread_id === 'number'
+      ? `[forum_thread_id=${ctx.message.message_thread_id}]\n`
+      : undefined
+
+  const outboundMessageThreadId = directedOn
+    ? ctx.message &&
+      'message_thread_id' in ctx.message &&
+      typeof ctx.message.message_thread_id === 'number'
+      ? ctx.message.message_thread_id
+      : null
+    : undefined
 
   const username =
     ctx.message?.from?.username ||
@@ -128,7 +192,8 @@ export const handleIncomingMessage = async (
   const content = composeUserContent({
     username,
     trimmedMessage,
-    imageInputs
+    imageInputs,
+    historyThreadPrefix
   })
 
   const newMessage: OpenAI.Responses.ResponseInputItem.Message =
@@ -141,7 +206,38 @@ export const handleIncomingMessage = async (
     newMessage: loggedMessage
   })
 
-  if (!shouldReply) return
+  const historyMessages = sanitizeHistoryMessages(sessionData.userMessages)
+
+  if (!shouldReply) {
+    if (sessionData.toggle_history) {
+      const messagesWithNew = [...historyMessages, newMessage]
+      await persistConversationHistory({
+        chatId,
+        messages: messagesWithNew,
+        toggleHistory: true,
+        sessionController: deps.sessionController,
+        embeddingService: deps.embeddingService,
+        openai: deps.openai,
+        model: sessionData.model
+      })
+
+      const latestUserLine = plainTextFromHistoryMessage(newMessage)
+      const recentTranscript = formatRecentHistoryForObserver(messagesWithNew)
+      const existingMemorySnippets = (sessionData.memories ?? [])
+        .slice(-5)
+        .map((m) => m.content)
+
+      const backgroundMemories = await extractBackgroundMemories(deps.openai, {
+        latestUserLine,
+        recentTranscript,
+        existingMemorySnippets
+      })
+      for (const content of backgroundMemories) {
+        await deps.sessionController.addMemory(chatId, content)
+      }
+    }
+    return
+  }
 
   let relativeMessage: (RecordMetadata | undefined)[] = []
 
@@ -170,8 +266,6 @@ export const handleIncomingMessage = async (
 
   if (!ctx.from) return
   const hasEnoughCoins = await deps.userService.hasEnoughCoins(ctx.from.id, 1)
-
-  const historyMessages = sanitizeHistoryMessages(sessionData.userMessages)
 
   const botMessages = await deps.responseApi(
     [
@@ -232,51 +326,27 @@ export const handleIncomingMessage = async (
     ...buildAssistantHistoryMessages(botMessages)
   ]
 
-  if (sessionData.toggle_history) {
-    const sanitizedForStorage = sanitizeHistoryMessages(messages)
-
-    if (sanitizedForStorage.length >= 20) {
-      const messagesToSummarize = sanitizedForStorage.slice(-20)
-
-      try {
-        const summaryText = await createConversationSummary(
-          messagesToSummarize,
-          deps.openai,
-          sessionData.model
-        )
-
-        await deps.embeddingService.saveSummary(chatId, summaryText)
-
-        const summaryMessage = createSummaryMessage(summaryText)
-        const remainingMessages = sanitizedForStorage.slice(0, -20)
-        const newHistory = [...remainingMessages, ...summaryMessage]
-
-        await deps.sessionController.updateSession(chatId, {
-          userMessages: newHistory
-        })
-      } catch (error) {
-        console.error('Error creating summary:', error)
-        await deps.sessionController.updateSession(chatId, {
-          userMessages: sanitizedForStorage.slice(-20)
-        })
-      }
-    } else {
-      await deps.sessionController.updateSession(chatId, {
-        userMessages: sanitizedForStorage
-      })
-    }
-  }
-
-  await ctx.telegram.sendChatAction(
+  await persistConversationHistory({
     chatId,
-    'typing',
-    sessionData.chat_settings.send_message_option
-  )
+    messages,
+    toggleHistory: sessionData.toggle_history,
+    sessionController: deps.sessionController,
+    embeddingService: deps.embeddingService,
+    openai: deps.openai,
+    model: sessionData.model
+  })
+
+  const typingExtras = directedOn
+    ? resolveSendExtras(sessionData, outboundMessageThreadId)
+    : sessionData.chat_settings.send_message_option
+
+  await ctx.telegram.sendChatAction(chatId, 'typing', typingExtras)
   await delay()
   await dispatchResponsesSequentially(responseMessages, {
     ctx,
     sessionData,
     userService: deps.userService,
-    env: deps.env
+    env: deps.env,
+    outboundMessageThreadId
   })
 }

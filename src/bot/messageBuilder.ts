@@ -10,24 +10,28 @@ interface UserMessageParams {
   username: string
   trimmedMessage: string
   imageInputs: OpenAI.Responses.ResponseInputImage[]
+  /** Prepended to the first text line for history (e.g. forum thread id). */
+  historyThreadPrefix?: string
 }
 
 export const composeUserContent = ({
   username,
   trimmedMessage,
-  imageInputs
+  imageInputs,
+  historyThreadPrefix
 }: UserMessageParams): OpenAI.Responses.ResponseInputMessageContentList => {
   const content: OpenAI.Responses.ResponseInputMessageContentList = []
+  const prefix = historyThreadPrefix ?? ''
 
   if (trimmedMessage.length > 0) {
     content.push({
       type: 'input_text',
-      text: `${username}: ${trimmedMessage}`
+      text: `${prefix}${username}: ${trimmedMessage}`
     })
   } else if (imageInputs.length > 0) {
     content.push({
       type: 'input_text',
-      text: `${username} отправил изображение`
+      text: `${prefix}${username} отправил изображение`
     })
   }
 
@@ -36,7 +40,7 @@ export const composeUserContent = ({
   if (content.length === 0) {
     content.push({
       type: 'input_text',
-      text: `${username}: ${trimmedMessage}`
+      text: `${prefix}${username}: ${trimmedMessage}`
     })
   }
 

@@ -7,7 +7,9 @@ const defaultStickerPack = 'koshachiy_raskolbas'
 const defaultSettings = {
   thread_id: undefined,
   reply_only_in_thread: false,
-  send_message_option: {}
+  directed_reply_gating: false,
+  send_message_option: {},
+  proactive_enabled: false
 }
 
 export class SessionController {
@@ -25,7 +27,9 @@ export class SessionController {
       model: DEFAULT_TEXT_MODEL,
       toggle_history: true,
       memories: [],
-      chat_settings: defaultSettings
+      chat_settings: defaultSettings,
+      thread_activity: {},
+      proactive_pending: {}
     }
     this.env = env
   }
@@ -43,6 +47,18 @@ export class SessionController {
       if (data) this.session = JSON.parse(data) as SessionData
       if (!('memories' in this.session)) {
         Object.assign(this.session, { memories: [] })
+      }
+      if (
+        !this.session.thread_activity ||
+        typeof this.session.thread_activity !== 'object'
+      ) {
+        this.session.thread_activity = {}
+      }
+      if (
+        !this.session.proactive_pending ||
+        typeof this.session.proactive_pending !== 'object'
+      ) {
+        this.session.proactive_pending = {}
       }
       if (!this.session.model) {
         this.session.model = DEFAULT_TEXT_MODEL
@@ -63,6 +79,24 @@ export class SessionController {
     const sanitizedValue = { ...value }
     if (sanitizedValue.model && sanitizedValue.model !== 'not_set') {
       sanitizedValue.model = resolveModelChoice(sanitizedValue.model)
+    }
+    if (sanitizedValue.chat_settings && this.session.chat_settings) {
+      sanitizedValue.chat_settings = {
+        ...this.session.chat_settings,
+        ...sanitizedValue.chat_settings
+      }
+    }
+    if (sanitizedValue.thread_activity) {
+      sanitizedValue.thread_activity = {
+        ...(this.session.thread_activity ?? {}),
+        ...sanitizedValue.thread_activity
+      }
+    }
+    if (sanitizedValue.proactive_pending) {
+      sanitizedValue.proactive_pending = {
+        ...(this.session.proactive_pending ?? {}),
+        ...sanitizedValue.proactive_pending
+      }
     }
 
     const newSession = {
@@ -92,6 +126,53 @@ export class SessionController {
     } catch (e) {
       console.error('resetStickers', e)
     }
+  }
+
+  async touchThreadActivity(
+    chatId: string | number,
+    threadKey: string,
+    at: Date = new Date()
+  ): Promise<void> {
+    await this.updateSession(chatId, {
+      thread_activity: {
+        [threadKey]: { lastActivityAt: at.toISOString() }
+      }
+    })
+  }
+
+  /** Clear pending proactive gate when a user posts in the thread (or default bucket). */
+  async removeProactivePendingKey(
+    chatId: string | number,
+    threadKey: string
+  ): Promise<void> {
+    await this.getSession(chatId)
+    const pending = this.session.proactive_pending
+    if (!pending || !(threadKey in pending)) return
+    const next = { ...pending }
+    delete next[threadKey]
+    this.session = { ...this.session, proactive_pending: next }
+    try {
+      await this.env.CHAT_SESSIONS_STORAGE.put(
+        `session_${chatId}`,
+        JSON.stringify(this.session)
+      )
+    } catch (e) {
+      console.error('removeProactivePendingKey', e)
+    }
+  }
+
+  async setProactivePendingKey(
+    chatId: string | number,
+    threadKey: string,
+    at: Date = new Date()
+  ): Promise<void> {
+    await this.getSession(chatId)
+    await this.updateSession(chatId, {
+      proactive_pending: {
+        ...(this.session.proactive_pending ?? {}),
+        [threadKey]: { sentAt: at.toISOString() }
+      }
+    })
   }
 
   async addMemory(chatId: string | number, content: string): Promise<void> {

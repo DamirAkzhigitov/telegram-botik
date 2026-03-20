@@ -1,4 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+
+const { mockProactiveCronTick } = vi.hoisted(() => ({
+  mockProactiveCronTick: vi.fn().mockResolvedValue(undefined)
+}))
+
+vi.mock('../src/cron/proactiveRevival', () => ({
+  runProactiveCronTick: mockProactiveCronTick
+}))
+
 import worker from '../src/index'
 
 // Mock createBot
@@ -14,11 +23,13 @@ vi.mock('../src/bot/createBot', () => ({
 const mockGetSessions = vi.fn()
 const mockGetSession = vi.fn()
 const mockGetAdminChats = vi.fn()
+const mockPatchSession = vi.fn()
 
 vi.mock('../src/api/sessions', () => ({
   getSessions: (...args: any[]) => mockGetSessions(...args),
   getSession: (...args: any[]) => mockGetSession(...args),
-  getAdminChats: (...args: any[]) => mockGetAdminChats(...args)
+  getAdminChats: (...args: any[]) => mockGetAdminChats(...args),
+  patchSession: (...args: any[]) => mockPatchSession(...args)
 }))
 
 describe('Worker Entry Point', () => {
@@ -26,6 +37,7 @@ describe('Worker Entry Point', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockProactiveCronTick.mockResolvedValue(undefined)
     mockEnv = {
       API_KEY: 'test-api-key',
       BOT_TOKEN: 'test-bot-token',
@@ -37,6 +49,7 @@ describe('Worker Entry Point', () => {
     mockGetSessions.mockResolvedValue(new Response('OK', { status: 200 }))
     mockGetSession.mockResolvedValue(new Response('OK', { status: 200 }))
     mockGetAdminChats.mockResolvedValue(new Response('OK', { status: 200 }))
+    mockPatchSession.mockResolvedValue(new Response('OK', { status: 200 }))
   })
 
   it('should handle POST request with valid update', async () => {
@@ -206,6 +219,26 @@ describe('Worker Entry Point', () => {
       expect(response.status).toBe(200)
     })
 
+    it('should handle PATCH /api/sessions/:chatId', async () => {
+      mockPatchSession.mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
+
+      const request = new Request('https://example.com/api/sessions/123', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'x' })
+      })
+
+      const response = await worker.fetch(request, mockEnv)
+
+      expect(mockPatchSession).toHaveBeenCalledWith(request, mockEnv, '123')
+      expect(response.status).toBe(200)
+    })
+
     it('should handle /api/admin/chats endpoint', async () => {
       mockGetAdminChats.mockResolvedValueOnce(
         new Response(JSON.stringify({ chats: [] }), {
@@ -309,6 +342,23 @@ describe('Worker Entry Point', () => {
       const response = await worker.fetch(request, mockEnv)
 
       expect(response.status).toBe(405)
+    })
+  })
+
+  describe('scheduled (Stage 3 proactive cron)', () => {
+    it('runs runProactiveCronTick with env', async () => {
+      const w = worker as {
+        scheduled: (
+          event: ScheduledEvent,
+          env: Env,
+          ctx: ExecutionContext
+        ) => Promise<void>
+      }
+
+      await w.scheduled({} as ScheduledEvent, mockEnv as Env, {} as ExecutionContext)
+
+      expect(mockProactiveCronTick).toHaveBeenCalledTimes(1)
+      expect(mockProactiveCronTick).toHaveBeenCalledWith(mockEnv)
     })
   })
 })

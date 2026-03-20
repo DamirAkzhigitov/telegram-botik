@@ -44,7 +44,10 @@
       "database_name": "bot-users-db",
       "database_id": "0258e356-702e-4246-889f-50b82c573ad6"
     }
-  ]
+  ],
+  "triggers": {
+    "crons": ["0 */3 * * *"]
+  }
   /**
    * Note: Use secrets to store sensitive data.
    * https://developers.cloudflare.com/workers/configuration/secrets/

@@ -14,7 +14,18 @@ export interface Memory {
 export interface ChatSettings {
   thread_id?: number
   reply_only_in_thread?: boolean
+  /** When true: ingest all messages, reply only when addressed; use trigger topic for sends. */
+  directed_reply_gating?: boolean
   send_message_option?: Record<string, unknown>
+  /** Stage 3: opt-in proactive revival cron (default off). */
+  proactive_enabled?: boolean
+  /** Hours without user activity in a thread before revival is considered; default 48. */
+  proactive_stale_hours?: number
+}
+
+/** Last-seen activity for cron / revival (per forum topic or one default bucket). */
+export interface ThreadActivityBucket {
+  lastActivityAt: string
 }
 
 export interface SessionData {
@@ -31,6 +42,18 @@ export interface SessionData {
   model?: AllowedTextModel | 'not_set'
   chat_settings: ChatSettings
   memories: Memory[] // Added memories array
+  /**
+   * Keys: forum topic id as decimal string, or `__default` for DMs / non-forum / forum without topic id.
+   * @see resolveThreadActivityKey in bot/threadActivity.ts
+   */
+  thread_activity?: Record<string, ThreadActivityBucket>
+  /**
+   * After a proactive send, block further proactives in that thread until a user posts again.
+   * Keys align with `thread_activity`.
+   */
+  proactive_pending?: Record<string, { sentAt: string }>
+  /** Cached from Telegram: supergroup with topics (for sendMessage message_thread_id). */
+  is_forum_supergroup?: boolean
 }
 
 export interface Sticker {

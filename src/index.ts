@@ -1,19 +1,37 @@
 import { createBot } from './bot/createBot'
-import { getSessions, getSession, getAdminChats } from './api/sessions'
+import {
+  getSessions,
+  getSession,
+  getAdminChats,
+  patchSession
+} from './api/sessions'
 import { getStickerPacks, getStickers, getStickerFile } from './api/stickers'
 import { generateSticker } from './api/generateSticker'
 import { sendStickerToUser } from './api/sendStickerToUser'
+import { runProactiveCronTick } from './cron/proactiveRevival'
 import type { Update } from 'telegraf/types'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     return handleUpdate(request, env)
+  },
+
+  async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
+    await runProactiveCronTick(env)
   }
 }
 
 async function handleUpdate(request: Request, env: Env) {
   const url = new URL(request.url)
   const pathname = url.pathname
+
+  // PATCH for admin session updates
+  if (request.method === 'PATCH') {
+    if (pathname.startsWith('/api/')) {
+      return handleApiRequest(request, env, pathname)
+    }
+    return new Response('Method Not Allowed', { status: 405 })
+  }
 
   // Handle POST requests for API (e.g. generate-sticker) and Telegram webhooks
   if (request.method === 'POST') {
@@ -70,16 +88,24 @@ async function handleApiRequest(
   env: Env,
   pathname: string
 ): Promise<Response> {
+  const sessionDetailMatch = pathname.match(/^\/api\/sessions\/(.+)$/)
+  if (sessionDetailMatch) {
+    const chatId = sessionDetailMatch[1]
+    if (request.method === 'GET') {
+      return getSession(request, env, chatId)
+    }
+    if (request.method === 'PATCH') {
+      return patchSession(request, env, chatId)
+    }
+    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
   // GET /api/sessions - List all sessions for admin chats
   if (pathname === '/api/sessions') {
     return getSessions(request, env)
-  }
-
-  // GET /api/sessions/:chatId - Get specific session
-  const sessionMatch = pathname.match(/^\/api\/sessions\/(.+)$/)
-  if (sessionMatch) {
-    const chatId = sessionMatch[1]
-    return getSession(request, env, chatId)
   }
 
   // GET /api/admin/chats - List admin chats
@@ -213,6 +239,57 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       font-size: 14px;
       display: block;
       word-break: break-word;
+    }
+    .detail-item input[type="text"],
+    .detail-item textarea {
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 14px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--tg-theme-hint-color, #cccccc);
+      background: var(--tg-theme-bg-color, #ffffff);
+      color: var(--tg-theme-text-color, #000000);
+    }
+    .detail-item textarea {
+      min-height: 80px;
+      font-family: ui-monospace, monospace;
+      resize: vertical;
+    }
+    .detail-item input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    .session-edit-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .session-edit-toolbar button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .session-edit-toolbar .edit-btn {
+      background: var(--tg-theme-button-color, #3390ec);
+      color: var(--tg-theme-button-text-color, #ffffff);
+    }
+    .session-edit-toolbar .save-btn {
+      background: #2d9f5e;
+      color: #ffffff;
+    }
+    .session-edit-toolbar .cancel-btn {
+      background: var(--tg-theme-secondary-bg-color, #e8e8e8);
+      color: var(--tg-theme-text-color, #000000);
+    }
+    .session-edit-toolbar button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
     .back-button {
       background: var(--tg-theme-button-color, #3390ec);
@@ -617,6 +694,10 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       const [stickerInputMode, setStickerInputMode] = React.useState('upload');
       const [stickerImageFile, setStickerImageFile] = React.useState(null);
       const [stickerImagePreview, setStickerImagePreview] = React.useState(null);
+      const [sessionEditing, setSessionEditing] = React.useState(false);
+      const [sessionDraft, setSessionDraft] = React.useState(null);
+      const [sessionSaveLoading, setSessionSaveLoading] = React.useState(false);
+      const [sessionSaveError, setSessionSaveError] = React.useState(null);
 
       const isDevMode = () => {
         const host = window.location.hostname || '';
@@ -698,6 +779,12 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
           .finally(() => setStickersLoading(false));
       }, [packToFetch]);
 
+      useEffect(() => {
+        setSessionEditing(false);
+        setSessionDraft(null);
+        setSessionSaveError(null);
+      }, [selectedSession?.chatId]);
+
       function loadSessions(auth) {
         setSessionsLoading(true);
         const baseUrl = window.location.origin;
@@ -728,15 +815,16 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       function loadSessionDetail(chatId) {
         const tg = window.Telegram?.WebApp;
         const initData = tg?.initData || '';
-        
-        if (!initData) {
+        if (!initData && !isDevMode()) {
           setError('Authentication required');
           return;
         }
-        
         const baseUrl = window.location.origin;
-        const url = \`\${baseUrl}/api/sessions/\${chatId}?_auth=\${encodeURIComponent(initData)}\`;
-        
+        const authParam =
+          isDevMode() && !initData
+            ? 'dev=1'
+            : \`_auth=\${encodeURIComponent(initData)}\`;
+        const url = \`\${baseUrl}/api/sessions/\${chatId}?\${authParam}\`;
         fetch(url)
           .then(res => {
             if (!res.ok) throw new Error(\`HTTP \${res.status}\`);
@@ -749,6 +837,108 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
             console.error('Error loading session detail:', err);
             setError(err.message);
           });
+      }
+
+      function beginSessionEdit() {
+        const s = selectedSession?.session;
+        if (!s) return;
+        setSessionDraft({
+          model: s.model != null ? String(s.model) : 'not_set',
+          prompt: s.prompt ?? '',
+          stickersPacksStr: (s.stickersPacks || []).join(', '),
+          toggle_history: Boolean(s.toggle_history),
+          firstTime: Boolean(s.firstTime),
+          promptNotSet: Boolean(s.promptNotSet),
+          stickerNotSet: Boolean(s.stickerNotSet),
+          chat_settings_json: JSON.stringify(s.chat_settings ?? {}, null, 2),
+          memories_json: JSON.stringify(s.memories ?? [], null, 2)
+        });
+        setSessionEditing(true);
+        setSessionSaveError(null);
+      }
+
+      function cancelSessionEdit() {
+        setSessionEditing(false);
+        setSessionDraft(null);
+        setSessionSaveError(null);
+      }
+
+      async function saveSessionEdit() {
+        if (!selectedSession || !sessionDraft) return;
+        let chat_settings;
+        let memories;
+        try {
+          chat_settings = JSON.parse(sessionDraft.chat_settings_json);
+        } catch {
+          setSessionSaveError('Chat settings: invalid JSON');
+          return;
+        }
+        try {
+          memories = JSON.parse(sessionDraft.memories_json);
+        } catch {
+          setSessionSaveError('Memories: invalid JSON');
+          return;
+        }
+        if (typeof chat_settings !== 'object' || chat_settings === null || Array.isArray(chat_settings)) {
+          setSessionSaveError('Chat settings must be a JSON object');
+          return;
+        }
+        if (!Array.isArray(memories)) {
+          setSessionSaveError('Memories must be a JSON array');
+          return;
+        }
+        const stickersPacks = sessionDraft.stickersPacksStr
+          .split(',')
+          .map((x) => x.trim())
+          .filter(Boolean);
+        const tg = window.Telegram?.WebApp;
+        const initData = tg?.initData || '';
+        if (!initData && !isDevMode()) {
+          setSessionSaveError('Authentication required');
+          return;
+        }
+        const baseUrl = window.location.origin;
+        const authParam =
+          isDevMode() && !initData
+            ? 'dev=1'
+            : \`_auth=\${encodeURIComponent(initData)}\`;
+        const url = \`\${baseUrl}/api/sessions/\${selectedSession.chatId}?\${authParam}\`;
+        const body = {
+          model: sessionDraft.model.trim() || 'not_set',
+          prompt: sessionDraft.prompt,
+          stickersPacks,
+          toggle_history: sessionDraft.toggle_history,
+          firstTime: sessionDraft.firstTime,
+          promptNotSet: sessionDraft.promptNotSet,
+          stickerNotSet: sessionDraft.stickerNotSet,
+          chat_settings,
+          memories
+        };
+        setSessionSaveLoading(true);
+        setSessionSaveError(null);
+        try {
+          const res = await fetch(url, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data.error || \`HTTP \${res.status}\`);
+          }
+          setSelectedSession(data);
+          setSessionEditing(false);
+          setSessionDraft(null);
+          const tgAfter = window.Telegram?.WebApp;
+          const idAfter = tgAfter?.initData || '';
+          if (idAfter || isDevMode()) {
+            loadSessions(isDevMode() ? null : idAfter);
+          }
+        } catch (err) {
+          setSessionSaveError(err?.message || 'Save failed');
+        } finally {
+          setSessionSaveLoading(false);
+        }
       }
 
       if (loading) {
@@ -999,84 +1189,253 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
         if (activeTab === TABS.admin) {
           if (selectedSession) {
             const session = selectedSession.session;
+            const d = sessionDraft;
             return (
               <>
-                <button className="back-button" onClick={() => setSelectedSession(null)}>
+                <button
+                  className="back-button"
+                  onClick={() => {
+                    cancelSessionEdit();
+                    setSelectedSession(null);
+                  }}
+                >
                   ← Back to Sessions
                 </button>
                 <div className="session-detail">
-              <h2>{selectedSession.chatInfo?.title || \`Chat \${selectedSession.chatId}\`}</h2>
-              
-              <div className="detail-item">
-                <label>Chat ID</label>
-                <value>{selectedSession.chatId}</value>
-              </div>
-              
-              <div className="detail-item">
-                <label>Model</label>
-                <value>{session.model || 'not_set'}</value>
-              </div>
-              
-              <div className="detail-item">
-                <label>Prompt</label>
-                <value>{session.prompt || '(empty)'}</value>
-              </div>
-              
-              <div className="detail-item">
-                <label>Sticker Packs</label>
-                <value>{session.stickersPacks?.join(', ') || 'none'}</value>
-              </div>
-              
-              <div className="detail-item">
-                <label>Memories Count</label>
-                <value>{session.memories?.length || 0}</value>
-              </div>
-              
-              <div className="detail-item">
-                <label>User Messages Count</label>
-                <value>{session.userMessages?.length || 0}</value>
-              </div>
-              
-              <div className="detail-item">
-                <label>Toggle History</label>
-                <value>{session.toggle_history ? 'Enabled' : 'Disabled'}</value>
-              </div>
-              
-              <div className="detail-item">
-                <label>First Time</label>
-                <value>{session.firstTime ? 'Yes' : 'No'}</value>
-              </div>
-              
-              <div className="detail-item">
-                <label>Prompt Not Set</label>
-                <value>{session.promptNotSet ? 'Yes' : 'No'}</value>
-              </div>
-              
-              <div className="detail-item">
-                <label>Sticker Not Set</label>
-                <value>{session.stickerNotSet ? 'Yes' : 'No'}</value>
-              </div>
-              
-              {session.chat_settings && (
-                <div className="detail-item">
-                  <label>Chat Settings</label>
-                  <value>{JSON.stringify(session.chat_settings, null, 2)}</value>
-                </div>
-              )}
-              
-              {session.memories && session.memories.length > 0 && (
-                <div className="detail-item">
-                  <label>Memories</label>
-                  <value>
-                    {session.memories.map((m, i) => (
-                      <div key={i} style={{ marginTop: '8px', padding: '8px', background: 'rgba(0,0,0,0.05)', borderRadius: '4px' }}>
-                        <div style={{ fontSize: '12px', color: '#999', marginBottom: '4px' }}>{m.timestamp}</div>
-                        <div>{m.content}</div>
-                      </div>
-                    ))}
-                  </value>
-                </div>
-              )}
+                  <h2>{selectedSession.chatInfo?.title || \`Chat \${selectedSession.chatId}\`}</h2>
+
+                  <div className="session-edit-toolbar">
+                    {!sessionEditing ? (
+                      <button type="button" className="edit-btn" onClick={beginSessionEdit}>
+                        Edit
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="save-btn"
+                          disabled={sessionSaveLoading}
+                          onClick={saveSessionEdit}
+                        >
+                          {sessionSaveLoading ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          className="cancel-btn"
+                          disabled={sessionSaveLoading}
+                          onClick={cancelSessionEdit}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {sessionSaveError && (
+                    <div className="error" style={{ marginBottom: '12px' }}>{sessionSaveError}</div>
+                  )}
+
+                  <div className="detail-item">
+                    <label>Chat ID</label>
+                    <value>{selectedSession.chatId}</value>
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Model</label>
+                    {sessionEditing && d ? (
+                      <input
+                        type="text"
+                        value={d.model}
+                        onChange={(e) =>
+                          setSessionDraft((prev) =>
+                            prev ? { ...prev, model: e.target.value } : prev
+                          )
+                        }
+                      />
+                    ) : (
+                      <value>{session.model || 'not_set'}</value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Prompt</label>
+                    {sessionEditing && d ? (
+                      <textarea
+                        value={d.prompt}
+                        onChange={(e) =>
+                          setSessionDraft((prev) =>
+                            prev ? { ...prev, prompt: e.target.value } : prev
+                          )
+                        }
+                        rows={4}
+                      />
+                    ) : (
+                      <value>{session.prompt || '(empty)'}</value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Sticker Packs (comma-separated)</label>
+                    {sessionEditing && d ? (
+                      <input
+                        type="text"
+                        value={d.stickersPacksStr}
+                        onChange={(e) =>
+                          setSessionDraft((prev) =>
+                            prev ? { ...prev, stickersPacksStr: e.target.value } : prev
+                          )
+                        }
+                      />
+                    ) : (
+                      <value>{session.stickersPacks?.join(', ') || 'none'}</value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Memories Count</label>
+                    <value>{session.memories?.length || 0}</value>
+                  </div>
+
+                  <div className="detail-item">
+                    <label>User Messages Count</label>
+                    <value>{session.userMessages?.length || 0}</value>
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Toggle History</label>
+                    {sessionEditing && d ? (
+                      <label style={{ display: 'flex', alignItems: 'center', fontWeight: 400 }}>
+                        <input
+                          type="checkbox"
+                          checked={d.toggle_history}
+                          onChange={(e) =>
+                            setSessionDraft((prev) =>
+                              prev ? { ...prev, toggle_history: e.target.checked } : prev
+                            )
+                          }
+                        />
+                        Enabled
+                      </label>
+                    ) : (
+                      <value>{session.toggle_history ? 'Enabled' : 'Disabled'}</value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>First Time</label>
+                    {sessionEditing && d ? (
+                      <label style={{ display: 'flex', alignItems: 'center', fontWeight: 400 }}>
+                        <input
+                          type="checkbox"
+                          checked={d.firstTime}
+                          onChange={(e) =>
+                            setSessionDraft((prev) =>
+                              prev ? { ...prev, firstTime: e.target.checked } : prev
+                            )
+                          }
+                        />
+                        Yes
+                      </label>
+                    ) : (
+                      <value>{session.firstTime ? 'Yes' : 'No'}</value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Prompt Not Set</label>
+                    {sessionEditing && d ? (
+                      <label style={{ display: 'flex', alignItems: 'center', fontWeight: 400 }}>
+                        <input
+                          type="checkbox"
+                          checked={d.promptNotSet}
+                          onChange={(e) =>
+                            setSessionDraft((prev) =>
+                              prev ? { ...prev, promptNotSet: e.target.checked } : prev
+                            )
+                          }
+                        />
+                        Yes
+                      </label>
+                    ) : (
+                      <value>{session.promptNotSet ? 'Yes' : 'No'}</value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Sticker Not Set</label>
+                    {sessionEditing && d ? (
+                      <label style={{ display: 'flex', alignItems: 'center', fontWeight: 400 }}>
+                        <input
+                          type="checkbox"
+                          checked={d.stickerNotSet}
+                          onChange={(e) =>
+                            setSessionDraft((prev) =>
+                              prev ? { ...prev, stickerNotSet: e.target.checked } : prev
+                            )
+                          }
+                        />
+                        Yes
+                      </label>
+                    ) : (
+                      <value>{session.stickerNotSet ? 'Yes' : 'No'}</value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Chat Settings (JSON)</label>
+                    {sessionEditing && d ? (
+                      <textarea
+                        value={d.chat_settings_json}
+                        onChange={(e) =>
+                          setSessionDraft((prev) =>
+                            prev ? { ...prev, chat_settings_json: e.target.value } : prev
+                          )
+                        }
+                        rows={6}
+                      />
+                    ) : (
+                      <value>
+                        {session.chat_settings
+                          ? JSON.stringify(session.chat_settings, null, 2)
+                          : '(none)'}
+                      </value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Memories</label>
+                    {sessionEditing && d ? (
+                      <textarea
+                        value={d.memories_json}
+                        onChange={(e) =>
+                          setSessionDraft((prev) =>
+                            prev ? { ...prev, memories_json: e.target.value } : prev
+                          )
+                        }
+                        rows={10}
+                      />
+                    ) : session.memories && session.memories.length > 0 ? (
+                      <value>
+                        {session.memories.map((m, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              marginTop: '8px',
+                              padding: '8px',
+                              background: 'rgba(0,0,0,0.05)',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            <div style={{ fontSize: '12px', color: '#999', marginBottom: '4px' }}>
+                              {m.timestamp}
+                            </div>
+                            <div>{m.content}</div>
+                          </div>
+                        ))}
+                      </value>
+                    ) : (
+                      <value>(none)</value>
+                    )}
+                  </div>
                 </div>
               </>
             );
