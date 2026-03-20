@@ -1,7 +1,7 @@
 import OpenAI from 'openai'
 import { EmbeddingService } from '../service/EmbeddingService'
 import { SessionController } from '../service/SessionController'
-import type { MessagesArray, SessionData } from '../types'
+import type { ChatSettings, MessagesArray, SessionData } from '../types'
 import {
   buildAssistantHistoryMessages,
   persistConversationHistory,
@@ -18,7 +18,10 @@ import {
 } from '../bot/memoryObserver'
 import { THREAD_ACTIVITY_DEFAULT_KEY } from '../bot/threadActivity'
 import {
+  formatPersonaMoodMemoryLine,
+  personaMoodChanged,
   resolveMoodForInjection,
+  resolvePersonaMoodForInjection,
   updateMoodAfterAddressedTurn
 } from '../bot/mood'
 import { getOpenAIClient } from '../gpt'
@@ -340,7 +343,8 @@ export async function runProactiveCronTick(env: Env): Promise<void> {
           hasEnoughCoins: true,
           model: session.model,
           prompt: session.prompt,
-          moodText: resolveMoodForInjection(session.chat_settings)
+          moodText: resolveMoodForInjection(session.chat_settings),
+          personaMoodText: resolvePersonaMoodForInjection(session.chat_settings)
         }
       )
     } else {
@@ -412,20 +416,38 @@ export async function runProactiveCronTick(env: Env): Promise<void> {
     )
 
     const prevMood = resolveMoodForInjection(session.chat_settings)
-    const newMood = await updateMoodAfterAddressedTurn(openai, {
-      userLine: `proactive revival (cron) thread ${threadKey}\n${transcript.slice(-1200)}`,
-      assistantVisible: textToSend,
-      previousMood: prevMood,
-      previousMoodUpdatedAt: session.chat_settings.mood_updated_at
-    })
-    if (newMood && newMood.trim() !== (prevMood ?? '').trim()) {
-      await sessionController.updateSession(chatId, {
-        chat_settings: {
-          mood_text: newMood,
-          mood_updated_at: new Date().toISOString()
-        }
+    const prevPersona = session.chat_settings.persona_mood
+    const { mood: newMood, persona: newPersona } =
+      await updateMoodAfterAddressedTurn(openai, {
+        userLine: `proactive revival (cron) thread ${threadKey}\n${transcript.slice(-1200)}`,
+        assistantVisible: textToSend,
+        previousMood: prevMood,
+        previousMoodUpdatedAt: session.chat_settings.mood_updated_at,
+        previousPersona: prevPersona
       })
-      await sessionController.addMemory(chatId, `Настроение: ${newMood}`)
+    const moodChanged =
+      Boolean(newMood) && newMood!.trim() !== (prevMood ?? '').trim()
+    const personaChanged =
+      Boolean(newPersona) && personaMoodChanged(prevPersona, newPersona)
+
+    if (moodChanged || personaChanged) {
+      const chatSettingsPatch: Partial<ChatSettings> = {}
+      if (moodChanged && newMood) chatSettingsPatch.mood_text = newMood
+      if (personaChanged && newPersona)
+        chatSettingsPatch.persona_mood = newPersona
+      chatSettingsPatch.mood_updated_at = new Date().toISOString()
+      await sessionController.updateSession(chatId, {
+        chat_settings: chatSettingsPatch
+      })
+      if (moodChanged && newMood) {
+        await sessionController.addMemory(chatId, `Настроение: ${newMood}`)
+      }
+      if (personaChanged && newPersona) {
+        await sessionController.addMemory(
+          chatId,
+          formatPersonaMoodMemoryLine(newPersona)
+        )
+      }
     }
   }
 }

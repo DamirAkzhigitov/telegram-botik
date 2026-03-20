@@ -1,6 +1,8 @@
 import type { Context } from 'telegraf'
 import type { Message, User } from 'telegraf/types'
 import OpenAI from 'openai'
+import type { SessionData } from '../types'
+import { plainTextFromHistoryMessage } from './memoryObserver'
 
 /** Cheap model for addressed-or-not classification in groups. */
 export const ADDRESS_CLASSIFIER_MODEL = 'gpt-4.1-mini'
@@ -137,6 +139,57 @@ export async function getBotUser(ctx: Context): Promise<User> {
   return ctx.telegram.getMe()
 }
 
+/** How many prior user lines from KV history feed the classifier (pronoun / thread disambiguation). */
+const MAX_CLASSIFIER_PRIOR_LINES = 16
+/** Total character budget for the numbered "Recent lines" block sent to the model. */
+const MAX_CLASSIFIER_PRIOR_CHARS = 12_000
+/** Max characters of the triggering message included after "Latest message to classify". */
+const MAX_CLASSIFIER_LATEST_CHARS = 12_000
+
+export interface AddressedClassifierRecentOpts {
+  /** When `scopeToForumThread` is true, only lines with this `[forum_thread_id=…]` prefix are included. */
+  currentThreadId?: number
+  /** Forum topic + numeric `message_thread_id` on the trigger (matches stored history prefix). */
+  scopeToForumThread?: boolean
+}
+
+/**
+ * Prior user lines from persisted history (the current Telegram message is not in KV yet).
+ * Used so the small model can resolve pronouns / continuation (e.g. human→human thread).
+ */
+export function buildAddressedClassifierRecentContext(
+  messages: SessionData['userMessages'],
+  opts: AddressedClassifierRecentOpts = {}
+): string | undefined {
+  const { currentThreadId, scopeToForumThread } = opts
+  const collected: string[] = []
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (collected.length >= MAX_CLASSIFIER_PRIOR_LINES) break
+    const m = messages[i]
+    if (m.role !== 'user') continue
+    let text = plainTextFromHistoryMessage(m).trim()
+    if (!text) continue
+
+    if (scopeToForumThread && typeof currentThreadId === 'number') {
+      const prefix = `[forum_thread_id=${currentThreadId}]\n`
+      if (!text.startsWith(prefix)) continue
+      text = text.slice(prefix.length).trim()
+    }
+
+    collected.unshift(text)
+  }
+
+  if (collected.length === 0) return undefined
+
+  const numbered = collected.map((line, idx) => `${idx + 1}. ${line}`)
+  let block = numbered.join('\n')
+  if (block.length > MAX_CLASSIFIER_PRIOR_CHARS) {
+    block = block.slice(-MAX_CLASSIFIER_PRIOR_CHARS)
+  }
+  return block
+}
+
 function parseAddressedClassifierJson(raw: string): {
   addressed?: unknown
 } | null {
@@ -156,15 +209,25 @@ export async function classifyWhetherAddressed(
     userText: string
     botUsername?: string
     botFirstName?: string
+    /** Older→newer tail of stored user lines (same topic when forum-scoped). */
+    recentTranscript?: string
   }
 ): Promise<boolean | null> {
-  const { userText, botUsername, botFirstName } = params
+  const { userText, botUsername, botFirstName, recentTranscript } = params
   const who = [
     botFirstName,
     botUsername ? `@${botUsername.replace(/^@/, '')}` : ''
   ]
     .filter(Boolean)
     .join(' / ')
+
+  const prior = recentTranscript?.trim()
+  const userPayload =
+    `Bot identity: ${who || 'unknown'}\n` +
+    (prior
+      ? `Recent lines in this chat/topic (older first; excludes the line you are classifying):\n${prior}\n\n`
+      : '') +
+    `Latest message to classify:\n${userText.slice(0, MAX_CLASSIFIER_LATEST_CHARS)}`
 
   try {
     const completion = await openai.chat.completions.create(
@@ -177,17 +240,19 @@ export async function classifyWhetherAddressed(
           {
             role: 'system',
             content:
-              'You decide if a group chat line is meant for the bot to answer (user wants the bot to respond) versus background chat between humans. ' +
+              'You decide if the LATEST group chat line is meant for the bot to answer (user wants the bot to respond) versus background chat between humans. ' +
+              'Use Recent lines when present: pronouns (you/ты/тебе/тобой) or short follow-ups often refer to the person addressed there, not the bot. ' +
+              'If the latest line clearly continues a human-to-human thread (e.g. a name in recent lines, then "play with you" without @bot or bot name), output {"addressed":false}. ' +
               'Reply with JSON only: {"addressed":true} or {"addressed":false}. ' +
               'If unsure, prefer false.'
           },
           {
             role: 'user',
-            content: `Bot identity: ${who || 'unknown'}\nMessage:\n${userText.slice(0, 2000)}`
+            content: userPayload
           }
         ]
       },
-      { timeout: 12_000 }
+      { timeout: 30_000 }
     )
 
     const raw = completion.choices[0]?.message?.content
@@ -207,7 +272,8 @@ export async function classifyWhetherAddressed(
  */
 export async function resolveShouldReplyDirected(
   ctx: Context,
-  openai: OpenAI
+  openai: OpenAI,
+  options?: { recentTranscript?: string }
 ): Promise<boolean> {
   const chat = ctx.chat
   if (!chat) return false
@@ -223,7 +289,8 @@ export async function resolveShouldReplyDirected(
   const classified = await classifyWhetherAddressed(openai, {
     userText: userText || '(no text)',
     botUsername: me.username,
-    botFirstName: me.first_name
+    botFirstName: me.first_name,
+    recentTranscript: options?.recentTranscript
   })
   if (classified === null) {
     console.warn(

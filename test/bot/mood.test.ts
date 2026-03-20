@@ -4,7 +4,10 @@ import {
   validateMoodTextForStorage,
   isRussianMoodText,
   resolveMoodForInjection,
-  validateChatSettingsPatchPartial
+  validateChatSettingsPatchPartial,
+  validatePersonaMoodForStorage,
+  resolvePersonaMoodForInjection,
+  personaMoodChanged
 } from '../../src/bot/mood'
 import type { ChatSettings } from '../../src/types'
 
@@ -49,5 +52,43 @@ describe('mood validation', () => {
     expect(validateChatSettingsPatchPartial({ mood_text: 'x' })?.length).toBeGreaterThan(
       0
     )
+  })
+})
+
+describe('persona_mood', () => {
+  const ru15 = 'а'.repeat(15)
+
+  it('validatePersonaMoodForStorage accepts optional Russian fields', () => {
+    const r = validatePersonaMoodForStorage({
+      thinking_now: ru15,
+      social_edges: '@user1 ок, @user2 нет'
+    })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value.thinking_now).toBe(ru15)
+      expect(r.value.social_edges).toContain('@user1')
+    }
+  })
+
+  it('resolvePersonaMoodForInjection formats developer block', () => {
+    const block = resolvePersonaMoodForInjection({
+      persona_mood: {
+        thinking_now: ru15,
+        in_mind: ru15,
+        next_to_discuss: ru15,
+        social_edges: 'к @alice ок, к @bob холодно'
+      }
+    })
+    expect(block).toContain('Сейчас думаю о')
+    expect(block).toContain('Люди в чате')
+  })
+
+  it('personaMoodChanged detects edits', () => {
+    expect(
+      personaMoodChanged(
+        { thinking_now: ru15 },
+        { thinking_now: ru15 + 'x' }
+      )
+    ).toBe(true)
   })
 })

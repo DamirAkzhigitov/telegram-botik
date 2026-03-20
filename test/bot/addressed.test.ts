@@ -9,8 +9,10 @@ import {
   plainTextReferencesBot,
   hasHardAddressedSignal,
   classifyWhetherAddressed,
+  buildAddressedClassifierRecentContext,
   ADDRESS_CLASSIFIER_MODEL
 } from '../../src/bot/addressed'
+import type { SessionData } from '../../src/types'
 
 const botUser: User = {
   id: 99,
@@ -88,6 +90,42 @@ describe('addressed heuristics', () => {
   })
 })
 
+describe('buildAddressedClassifierRecentContext', () => {
+  const userLine = (text: string): SessionData['userMessages'][number] => ({
+    role: 'user',
+    content: [{ type: 'input_text', text }]
+  })
+
+  it('returns undefined when history is empty', () => {
+    expect(buildAddressedClassifierRecentContext([])).toBeUndefined()
+  })
+
+  it('includes last user lines in order when not forum-scoped', () => {
+    const messages: SessionData['userMessages'] = [
+      userLine('a: first'),
+      userLine('b: second'),
+      userLine('c: third')
+    ]
+    const ctx = buildAddressedClassifierRecentContext(messages)
+    expect(ctx).toContain('1. a: first')
+    expect(ctx).toContain('2. b: second')
+    expect(ctx).toContain('3. c: third')
+  })
+
+  it('filters by forum thread prefix when scopeToForumThread', () => {
+    const messages: SessionData['userMessages'] = [
+      userLine('[forum_thread_id=1]\nx: in topic 1'),
+      userLine('[forum_thread_id=2]\ny: in topic 2')
+    ]
+    const t2 = buildAddressedClassifierRecentContext(messages, {
+      currentThreadId: 2,
+      scopeToForumThread: true
+    })
+    expect(t2).toContain('y: in topic 2')
+    expect(t2).not.toContain('topic 1')
+  })
+})
+
 describe('classifyWhetherAddressed', () => {
   let create: ReturnType<typeof vi.fn>
 
@@ -109,6 +147,21 @@ describe('classifyWhetherAddressed', () => {
       }),
       expect.anything()
     )
+  })
+
+  it('passes recentTranscript into the user message', async () => {
+    create.mockResolvedValue({
+      choices: [{ message: { content: '{"addressed":false}' } }]
+    })
+    const openai = { chat: { completions: { create } } } as any
+    await classifyWhetherAddressed(openai, {
+      userText: 'я вот думал поиграть с тобой',
+      recentTranscript: '1. Лех ну что ты там работаешь?'
+    })
+    const payload = create.mock.calls[0][0].messages[1].content as string
+    expect(payload).toContain('Recent lines')
+    expect(payload).toContain('Лех')
+    expect(payload).toContain('Latest message to classify')
   })
 
   it('returns null on invalid JSON shape', async () => {

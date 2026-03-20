@@ -28,7 +28,9 @@
    * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
    */
   "vars": {
-    "MY_VARIABLE": "production_value"
+    "MY_VARIABLE": "production_value",
+    // Telegram bot @username without @; override in .dev.vars for a test bot.
+    "BOT_USERNAME": "nairbru007bot"
   },
   "compatibility_flags": ["nodejs_compat"],
   "kv_namespaces": [

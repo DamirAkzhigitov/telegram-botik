@@ -848,10 +848,36 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
           });
       }
 
+      function parsePersonaMoodFromChatSettings(cs) {
+        let pm = cs && cs.persona_mood;
+        if (typeof pm === 'string') {
+          try {
+            pm = JSON.parse(pm);
+          } catch {
+            pm = null;
+          }
+        }
+        if (!pm || typeof pm !== 'object' || Array.isArray(pm)) pm = {};
+        return {
+          thinking_now: typeof pm.thinking_now === 'string' ? pm.thinking_now : '',
+          in_mind: typeof pm.in_mind === 'string' ? pm.in_mind : '',
+          next_to_discuss:
+            typeof pm.next_to_discuss === 'string' ? pm.next_to_discuss : '',
+          social_edges: typeof pm.social_edges === 'string' ? pm.social_edges : ''
+        };
+      }
+
+      function chatSettingsForAdvancedJson(cs) {
+        const o = Object.assign({}, cs || {});
+        delete o.persona_mood;
+        return o;
+      }
+
       function beginSessionEdit() {
         const s = selectedSession?.session;
         if (!s) return;
         const cs = s.chat_settings ?? {};
+        const persona = parsePersonaMoodFromChatSettings(cs);
         setSessionDraft({
           model: s.model != null ? String(s.model) : 'not_set',
           prompt: s.prompt ?? '',
@@ -867,7 +893,11 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
             cs.proactive_stale_hours != null && cs.proactive_stale_hours !== ''
               ? String(cs.proactive_stale_hours)
               : '',
-          chat_settings_json: JSON.stringify(cs, null, 2),
+          persona_thinking_now: persona.thinking_now,
+          persona_in_mind: persona.in_mind,
+          persona_next_to_discuss: persona.next_to_discuss,
+          persona_social_edges: persona.social_edges,
+          chat_settings_json: JSON.stringify(chatSettingsForAdvancedJson(cs), null, 2),
           memories_json: JSON.stringify(s.memories ?? [], null, 2)
         });
         setSessionEditing(true);
@@ -917,6 +947,45 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
             return;
           }
         }
+        const pt = (sessionDraft.persona_thinking_now || '').trim();
+        const pi = (sessionDraft.persona_in_mind || '').trim();
+        const pn = (sessionDraft.persona_next_to_discuss || '').trim();
+        const ps = (sessionDraft.persona_social_edges || '').trim();
+        const ruFields = [
+          ['thinking_now', pt],
+          ['in_mind', pi],
+          ['next_to_discuss', pn]
+        ];
+        for (let i = 0; i < ruFields.length; i++) {
+          const v = ruFields[i][1];
+          if (v.length === 0) continue;
+          if (v.length < 15) {
+            setSessionSaveError(
+              \`Persona (\${ruFields[i][0]}): at least 15 characters when set\`
+            );
+            return;
+          }
+          if (v.length > 450) {
+            setSessionSaveError('Persona: each field max 450 characters');
+            return;
+          }
+          if (/[A-Za-z]/.test(v)) {
+            setSessionSaveError(
+              \`Persona (\${ruFields[i][0]}): Russian only (no Latin letters)\`
+            );
+            return;
+          }
+        }
+        if (ps.length > 0) {
+          if (ps.length < 8) {
+            setSessionSaveError('Persona (social): at least 8 characters when set');
+            return;
+          }
+          if (ps.length > 450) {
+            setSessionSaveError('Persona: each field max 450 characters');
+            return;
+          }
+        }
         chat_settings = {
           ...chat_settings,
           directed_reply_gating: sessionDraft.directed_reply_gating,
@@ -925,6 +994,17 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
         };
         if (psh !== '') {
           chat_settings.proactive_stale_hours = Number(psh);
+        }
+        const hasPersona =
+          pt.length > 0 || pi.length > 0 || pn.length > 0 || ps.length > 0;
+        if (hasPersona) {
+          chat_settings.persona_mood = {};
+          if (pt.length > 0) chat_settings.persona_mood.thinking_now = pt;
+          if (pi.length > 0) chat_settings.persona_mood.in_mind = pi;
+          if (pn.length > 0) chat_settings.persona_mood.next_to_discuss = pn;
+          if (ps.length > 0) chat_settings.persona_mood.social_edges = ps;
+        } else {
+          chat_settings.persona_mood = null;
         }
         if (!Array.isArray(memories)) {
           setSessionSaveError('Memories must be a JSON array');
@@ -1512,7 +1592,116 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
                   </div>
 
                   <div className="detail-item">
-                    <label>Chat Settings (JSON, advanced)</label>
+                    <label>Persona state (inner voice)</label>
+                    <p
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--tg-theme-hint-color, #999999)',
+                        marginBottom: '8px'
+                      }}
+                    >
+                      Separate fields for structured mood. If the server had raw JSON in persona_mood, it is parsed when you open Edit. Clearing all four fields removes persona_mood.
+                    </p>
+                    {sessionEditing && d ? (
+                      <>
+                        <label style={{ fontSize: '13px', display: 'block', marginTop: '8px' }}>
+                          Сейчас думаю о (thinking_now)
+                        </label>
+                        <textarea
+                          value={d.persona_thinking_now}
+                          onChange={(e) =>
+                            setSessionDraft((prev) =>
+                              prev
+                                ? { ...prev, persona_thinking_now: e.target.value }
+                                : prev
+                            )
+                          }
+                          rows={3}
+                          placeholder="Russian, 15–450 chars when set; no Latin"
+                          style={{ marginBottom: '8px' }}
+                        />
+                        <label style={{ fontSize: '13px', display: 'block' }}>
+                          В голове держу (in_mind)
+                        </label>
+                        <textarea
+                          value={d.persona_in_mind}
+                          onChange={(e) =>
+                            setSessionDraft((prev) =>
+                              prev ? { ...prev, persona_in_mind: e.target.value } : prev
+                            )
+                          }
+                          rows={3}
+                          placeholder="Russian, 15–450 chars when set; no Latin"
+                          style={{ marginBottom: '8px' }}
+                        />
+                        <label style={{ fontSize: '13px', display: 'block' }}>
+                          Хочу обсудить дальше (next_to_discuss)
+                        </label>
+                        <textarea
+                          value={d.persona_next_to_discuss}
+                          onChange={(e) =>
+                            setSessionDraft((prev) =>
+                              prev
+                                ? { ...prev, persona_next_to_discuss: e.target.value }
+                                : prev
+                            )
+                          }
+                          rows={3}
+                          placeholder="Russian, 15–450 chars when set; no Latin"
+                          style={{ marginBottom: '8px' }}
+                        />
+                        <label style={{ fontSize: '13px', display: 'block' }}>
+                          Люди в чате (social_edges)
+                        </label>
+                        <textarea
+                          value={d.persona_social_edges}
+                          onChange={(e) =>
+                            setSessionDraft((prev) =>
+                              prev
+                                ? { ...prev, persona_social_edges: e.target.value }
+                                : prev
+                            )
+                          }
+                          rows={3}
+                          placeholder="@handles OK; 8–450 chars when set"
+                        />
+                      </>
+                    ) : (
+                      <value style={{ whiteSpace: 'pre-wrap', fontSize: '14px' }}>
+                        {(() => {
+                          const pm = parsePersonaMoodFromChatSettings(
+                            session.chat_settings ?? {}
+                          );
+                          const bits = [
+                            pm.thinking_now && (
+                              <div key="t" style={{ marginTop: '6px' }}>
+                                <strong>thinking_now:</strong> {pm.thinking_now}
+                              </div>
+                            ),
+                            pm.in_mind && (
+                              <div key="i" style={{ marginTop: '6px' }}>
+                                <strong>in_mind:</strong> {pm.in_mind}
+                              </div>
+                            ),
+                            pm.next_to_discuss && (
+                              <div key="n" style={{ marginTop: '6px' }}>
+                                <strong>next_to_discuss:</strong> {pm.next_to_discuss}
+                              </div>
+                            ),
+                            pm.social_edges && (
+                              <div key="s" style={{ marginTop: '6px' }}>
+                                <strong>social_edges:</strong> {pm.social_edges}
+                              </div>
+                            )
+                          ].filter(Boolean);
+                          return bits.length ? bits : '(none)';
+                        })()}
+                      </value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Chat Settings (JSON, advanced — excludes persona_mood)</label>
                     {sessionEditing && d ? (
                       <textarea
                         value={d.chat_settings_json}

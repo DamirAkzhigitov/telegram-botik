@@ -49,6 +49,7 @@ So: **pipeline integration** is partially covered; **real LLM** is always mocked
 
 ### 3.2 LLM unit tests
 
+- **Directed-reply classifier** (`src/bot/addressed.ts`): `classifyWhetherAddressed` is covered in **`test/bot/addressed.test.ts`** with a mocked `chat.completions.create`; assertions can inspect **`messages[1].content`** for prompt shape (e.g. `Recent lines` + prior transcript). `buildAddressedClassifierRecentContext` has pure helpers for forum thread filtering. **`test/bot/messageHandler.test.ts`** includes a **directed_reply_gating** case that checks the classifier payload when session history has a prior user line.
 - Logic lives in **`src/gpt.ts`** but tests live under **`test/bot.test.ts`** — easy to miss; consider **`test/gpt.test.ts`** (move or re-export) for discoverability.
 - **JSON schema** in `responses.create` is duplicated as a large inline object — changes risk drift; tests could assert **required keys** / **enum values** for `items[].type` or extract schema to a shared constant tested once.
 - **Edge cases** worth adding when product needs them: malformed JSON in `output_text`, `items` missing, multiple `message` outputs, only `image_generation_call` without text, whitespace-only `moodText` (should not inject, if that’s desired).

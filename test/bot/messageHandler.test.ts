@@ -71,7 +71,10 @@ vi.mock('../../src/bot/memoryObserver', async (importOriginal) => {
 
 vi.mock('../../src/bot/mood', () => ({
   resolveMoodForInjection: vi.fn(() => undefined),
-  updateMoodAfterAddressedTurn: vi.fn().mockResolvedValue(null)
+  resolvePersonaMoodForInjection: vi.fn(() => undefined),
+  updateMoodAfterAddressedTurn: vi
+    .fn()
+    .mockResolvedValue({ mood: null, persona: null })
 }))
 
 // Helpers to access mocks
@@ -551,7 +554,9 @@ describe('messageHandler', () => {
         content: [{ type: 'input_text', text: 'msg' }]
       })
 
-      sanitizeHistoryMessages.mockReturnValueOnce(manyMessages)
+      sanitizeHistoryMessages
+        .mockReturnValueOnce(manyMessages)
+        .mockReturnValueOnce(manyMessages)
 
       sessionController.getSession.mockResolvedValueOnce({
         userMessages: manyMessages.slice(0, 5),
@@ -593,7 +598,9 @@ describe('messageHandler', () => {
         content: [{ type: 'input_text', text: 'msg' }]
       })
 
-      sanitizeHistoryMessages.mockReturnValueOnce(manyMessages)
+      sanitizeHistoryMessages
+        .mockReturnValueOnce(manyMessages)
+        .mockReturnValueOnce(manyMessages)
 
       sessionController.getSession.mockResolvedValueOnce({
         userMessages: manyMessages.slice(0, 5),
@@ -851,6 +858,7 @@ describe('messageHandler', () => {
       mockOpenAI.chat.completions.create.mockResolvedValue({
         choices: [{ message: { content: '{"addressed":true}' } }]
       })
+      sanitizeHistoryMessages.mockImplementation((msgs: any) => msgs)
     })
 
     it('private chat: replies without classifier', async () => {
@@ -878,6 +886,54 @@ describe('messageHandler', () => {
 
       expect(mockOpenAI.chat.completions.create).not.toHaveBeenCalled()
       expect(responseApi).toHaveBeenCalled()
+    })
+
+    it('supergroup: includes prior user lines in classifier prompt when history exists', async () => {
+      mockOpenAI.chat.completions.create.mockResolvedValueOnce({
+        choices: [{ message: { content: '{"addressed":false}' } }]
+      })
+      const priorUser = {
+        role: 'user' as const,
+        content: [
+          {
+            type: 'input_text' as const,
+            text: 'bob: Лех ну что ты там работаешь? когда играть будет.'
+          }
+        ]
+      }
+      sessionController.getSession.mockResolvedValueOnce({
+        ...baseSession(),
+        userMessages: [priorUser]
+      })
+      const groupCtx = {
+        ...ctx,
+        chat: { id: 777, type: 'supergroup' as const },
+        botInfo: {
+          id: 1,
+          is_bot: true,
+          first_name: 'B',
+          username: 'thebot'
+        },
+        message: {
+          ...(ctx.message as object),
+          text: 'я вот думал поиграть с тобой'
+        }
+      }
+
+      await handleIncomingMessage(groupCtx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      const userPayload = mockOpenAI.chat.completions.create.mock.calls[0][0]
+        .messages[1].content as string
+      expect(userPayload).toContain('Recent lines')
+      expect(userPayload).toContain('Лех')
     })
 
     it('supergroup: classifier false skips reply', async () => {

@@ -30,7 +30,7 @@ This document analyzes **three** product directions against the current worker a
 
 ### Mentions
 
-- `BOT_NAME` ([`constants.ts`](../src/bot/constants.ts)) is still stripped before the **main** model sees text. Directed gating uses the raw update (entities + text) before that strip where relevant.
+- `resolveBotAtHandle` + `stripBotAtMentions` ([`constants.ts`](../src/bot/constants.ts)) strip the bot’s current `@username` (from `ctx.botInfo`, else `BOT_USERNAME` / `DEFAULT_BOT_USERNAME`) before the **main** model sees text. Directed gating uses the raw update (entities + text) before that strip where relevant.
 
 ### Reactivity only (no proactive jobs)
 
@@ -91,7 +91,7 @@ Today, the inverse is common: `reply_only_in_thread` limits **which messages ent
 
 ### Telegram signals (useful for gating)
 
-- **Text mention**: `@username` of the bot (compare to `ctx.me.username` or known `BOT_NAME`).
+- **Text mention**: `@username` of the bot (compare to `ctx.botInfo.username` or `env.BOT_USERNAME`).
 - **Reply chain**: `message.reply_to_message?.from?.is_bot` and whether it’s _this_ bot.
 - **Commands**: `entities` type `bot_command` at start of message.
 - **Forum**: `message_thread_id` — for replies, usually set `message_thread_id` to the **incoming** message’s thread (General can be `undefined` / 1 depending on API; test in your environment).

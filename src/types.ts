@@ -27,6 +27,25 @@ export interface ChatSettings {
   mood_text?: string
   /** ISO time when mood_text was last set (LLM or admin). */
   mood_updated_at?: string
+  /**
+   * Structured inner state (Russian; optional fields). Updated together with mood_text by the small model on addressed turns.
+   * Injected as a separate developer block so the main model can be “human”: selective interest, social edges, not a generic helper.
+   */
+  persona_mood?: PersonaMoodState
+}
+
+/** Narrow fields for “what I’m thinking / who I vibe with” — kept in chat_settings next to mood_text. */
+export interface PersonaMoodState {
+  /** Сейчас в голове: поток мыслей */
+  thinking_now?: string
+  /** Что держу в уме, фон */
+  in_mind?: string
+  /** О чём хочу выйти / обсудить дальше */
+  next_to_discuss?: string
+  /**
+   * К кому тепло, к кому холодно / бесит (ники как в чате; допускается латиница в никах).
+   */
+  social_edges?: string
 }
 
 /** Last-seen activity for cron / revival (per forum topic or one default bucket). */

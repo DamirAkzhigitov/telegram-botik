@@ -4,7 +4,7 @@ import type { AxiosInstance } from 'axios'
 import { EmbeddingService } from '../service/EmbeddingService'
 import { SessionController } from '../service/SessionController'
 import { UserService } from '../service/UserService'
-import type { MessagesArray, SessionData } from '../types'
+import type { ChatSettings, MessagesArray, SessionData } from '../types'
 import {
   composeUserContent,
   createLoggedMessage,
@@ -13,7 +13,13 @@ import {
   filterResponseMessages,
   joinVisibleAssistantText
 } from './messageBuilder'
-import { resolveMoodForInjection, updateMoodAfterAddressedTurn } from './mood'
+import {
+  formatPersonaMoodMemoryLine,
+  personaMoodChanged,
+  resolveMoodForInjection,
+  resolvePersonaMoodForInjection,
+  updateMoodAfterAddressedTurn
+} from './mood'
 import {
   sanitizeHistoryMessages,
   buildAssistantHistoryMessages,
@@ -26,8 +32,11 @@ import {
   resolveSendExtras
 } from './responseDispatcher'
 import { delay } from '../utils'
-import { BOT_NAME } from './constants'
-import { resolveShouldReplyDirected } from './addressed'
+import { resolveBotAtHandle, stripBotAtMentions } from './constants'
+import {
+  buildAddressedClassifierRecentContext,
+  resolveShouldReplyDirected
+} from './addressed'
 import { resolveThreadActivityKey } from './threadActivity'
 import {
   extractBackgroundMemories,
@@ -46,6 +55,7 @@ type ResponseApi = (
     model: string | undefined
     prompt: string | undefined
     moodText?: string
+    personaMoodText?: string
   }
 ) => Promise<MessagesArray | null>
 
@@ -160,6 +170,25 @@ export const handleIncomingMessage = async (
   }
 
   const directedOn = Boolean(sessionData.chat_settings.directed_reply_gating)
+  const isForum = isForumChat(ctx, sessionData)
+
+  const threadIdForClassifier =
+    ctx.message &&
+    'message_thread_id' in ctx.message &&
+    typeof ctx.message.message_thread_id === 'number'
+      ? ctx.message.message_thread_id
+      : undefined
+
+  const addressedClassifierRecentContext =
+    buildAddressedClassifierRecentContext(
+      sanitizeHistoryMessages(sessionData.userMessages),
+      {
+        currentThreadId: threadIdForClassifier,
+        scopeToForumThread: Boolean(
+          (directedOn || isForum) && threadIdForClassifier !== undefined
+        )
+      }
+    )
 
   /** Legacy thread gate applies to forum/supergroup threads only — not DMs (§2 / UX). */
   const legacyThreadAllowsReply =
@@ -170,10 +199,10 @@ export const handleIncomingMessage = async (
         : true
 
   const shouldReply = directedOn
-    ? await resolveShouldReplyDirected(ctx, deps.openai)
+    ? await resolveShouldReplyDirected(ctx, deps.openai, {
+        recentTranscript: addressedClassifierRecentContext
+      })
     : legacyThreadAllowsReply
-
-  const isForum = isForumChat(ctx, sessionData)
 
   const historyThreadPrefix =
     (directedOn || isForum) &&
@@ -200,7 +229,10 @@ export const handleIncomingMessage = async (
     typeof ctx.message.text === 'string'
       ? ctx.message.text
       : '') || ''
-  const userMessage = rawMessage.replace(BOT_NAME, '')
+  const userMessage = stripBotAtMentions(
+    rawMessage,
+    resolveBotAtHandle(ctx.botInfo, deps.env)
+  )
 
   console.log({
     log: 'bot.on(message())',
@@ -317,6 +349,10 @@ export const handleIncomingMessage = async (
   const hasEnoughCoins = await deps.userService.hasEnoughCoins(ctx.from.id, 1)
 
   const previousMoodForTurn = resolveMoodForInjection(sessionData.chat_settings)
+  const previousPersonaForTurn = sessionData.chat_settings.persona_mood
+  const personaMoodForTurn = resolvePersonaMoodForInjection(
+    sessionData.chat_settings
+  )
 
   const botMessages = await deps.responseApi(
     [
@@ -346,7 +382,8 @@ export const handleIncomingMessage = async (
       hasEnoughCoins,
       model: sessionData.model,
       prompt: sessionData.prompt,
-      moodText: previousMoodForTurn
+      moodText: previousMoodForTurn,
+      personaMoodText: personaMoodForTurn
     }
   )
 
@@ -403,20 +440,42 @@ export const handleIncomingMessage = async (
   const runMoodPipeline = async () => {
     try {
       const assistantVisible = joinVisibleAssistantText(responseMessages)
-      const newMood = await updateMoodAfterAddressedTurn(deps.openai, {
-        userLine: message.slice(0, 4000),
-        assistantVisible,
-        previousMood: previousMoodForTurn,
-        previousMoodUpdatedAt: sessionData.chat_settings.mood_updated_at
-      })
-      if (newMood && newMood.trim() !== (previousMoodForTurn ?? '').trim()) {
-        await deps.sessionController.updateSession(chatId, {
-          chat_settings: {
-            mood_text: newMood,
-            mood_updated_at: new Date().toISOString()
-          }
+      const { mood: newMood, persona: newPersona } =
+        await updateMoodAfterAddressedTurn(deps.openai, {
+          userLine: message.slice(0, 4000),
+          assistantVisible,
+          previousMood: previousMoodForTurn,
+          previousMoodUpdatedAt: sessionData.chat_settings.mood_updated_at,
+          previousPersona: previousPersonaForTurn
         })
+      const moodChanged =
+        Boolean(newMood) &&
+        newMood!.trim() !== (previousMoodForTurn ?? '').trim()
+      const personaChanged =
+        Boolean(newPersona) &&
+        personaMoodChanged(previousPersonaForTurn, newPersona)
+
+      if (!moodChanged && !personaChanged) return
+
+      const chatSettingsPatch: Partial<ChatSettings> = {}
+      if (moodChanged && newMood) chatSettingsPatch.mood_text = newMood
+      if (personaChanged && newPersona)
+        chatSettingsPatch.persona_mood = newPersona
+      if (moodChanged || personaChanged) {
+        chatSettingsPatch.mood_updated_at = new Date().toISOString()
+      }
+
+      await deps.sessionController.updateSession(chatId, {
+        chat_settings: chatSettingsPatch
+      })
+      if (moodChanged && newMood) {
         await deps.sessionController.addMemory(chatId, `Настроение: ${newMood}`)
+      }
+      if (personaChanged && newPersona) {
+        await deps.sessionController.addMemory(
+          chatId,
+          formatPersonaMoodMemoryLine(newPersona)
+        )
       }
     } catch (e) {
       console.error('mood update pipeline', e)

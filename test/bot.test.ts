@@ -323,4 +323,52 @@ describe('BotService', () => {
 
     consoleSpy.mockRestore()
   })
+
+  test('Should inject personaMoodText after mood when provided', async () => {
+    mockResponse.mockResolvedValueOnce({
+      status: 'success',
+      output: [
+        {
+          type: 'message',
+          content: [
+            {
+              type: 'output_text',
+              text: JSON.stringify({
+                items: [{ type: 'text', content: 'ok' }]
+              })
+            }
+          ]
+        }
+      ]
+    })
+
+    const { responseApi } = getOpenAIClient('KEY')
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const mood =
+      'а'.repeat(160) +
+      ' настроение для теста инъекции в промпт без латиницы только кириллица дальше текста'
+    const persona = 'Внутреннее состояние персонажа (тест):'
+
+    await responseApi([], { moodText: mood, personaMoodText: persona })
+
+    const callArgs = mockResponse.mock.calls[0][0]
+    const input = callArgs.input as { role: string; content: string }[]
+    const idxMood = input.findIndex(
+      (i) =>
+        i.role === 'developer' &&
+        typeof i.content === 'string' &&
+        i.content.includes('Текущее настроение в чате')
+    )
+    const idxPersona = input.findIndex(
+      (i) =>
+        i.role === 'developer' &&
+        typeof i.content === 'string' &&
+        i.content === persona
+    )
+    expect(idxMood).toBeGreaterThan(-1)
+    expect(idxPersona).toBeGreaterThan(idxMood)
+
+    consoleSpy.mockRestore()
+  })
 })

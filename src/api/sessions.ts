@@ -214,6 +214,24 @@ function parseSessionPatch(
         mood_updated_at: new Date().toISOString()
       }
     }
+    if ('persona_mood' in cs && cs.persona_mood === null) {
+      nextSettings = {
+        ...nextSettings,
+        persona_mood: undefined
+      }
+    }
+    if (
+      'persona_mood' in cs &&
+      cs.persona_mood &&
+      typeof cs.persona_mood === 'object' &&
+      !Array.isArray(cs.persona_mood) &&
+      Object.keys(cs.persona_mood).length > 0
+    ) {
+      nextSettings = {
+        ...nextSettings,
+        mood_updated_at: new Date().toISOString()
+      }
+    }
     patch.chat_settings = nextSettings
   }
 
