@@ -1,11 +1,22 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-const { mockProactiveCronTick } = vi.hoisted(() => ({
-  mockProactiveCronTick: vi.fn().mockResolvedValue(undefined)
-}))
+const { mockProactiveCronTick, mockGenerateSticker, mockSendStickerToUser } =
+  vi.hoisted(() => ({
+    mockProactiveCronTick: vi.fn().mockResolvedValue(undefined),
+    mockGenerateSticker: vi.fn(),
+    mockSendStickerToUser: vi.fn()
+  }))
 
 vi.mock('../src/cron/proactiveRevival', () => ({
   runProactiveCronTick: mockProactiveCronTick
+}))
+
+vi.mock('../src/api/generateSticker', () => ({
+  generateSticker: mockGenerateSticker
+}))
+
+vi.mock('../src/api/sendStickerToUser', () => ({
+  sendStickerToUser: mockSendStickerToUser
 }))
 
 import worker from '../src/index'
@@ -38,6 +49,8 @@ describe('Worker Entry Point', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockProactiveCronTick.mockResolvedValue(undefined)
+    mockGenerateSticker.mockResolvedValue(new Response('{}', { status: 200 }))
+    mockSendStickerToUser.mockResolvedValue(new Response('{}', { status: 200 }))
     mockEnv = {
       API_KEY: 'test-api-key',
       BOT_TOKEN: 'test-bot-token',
@@ -332,6 +345,28 @@ describe('Worker Entry Point', () => {
 
       expect(response.status).toBe(405)
       expect(await response.text()).toBe('Method Not Allowed')
+    })
+
+    it('should route POST /api/generate-sticker', async () => {
+      const request = new Request('https://example.com/api/generate-sticker', {
+        method: 'POST'
+      })
+
+      const response = await worker.fetch(request, mockEnv)
+
+      expect(mockGenerateSticker).toHaveBeenCalledWith(request, mockEnv)
+      expect(response.status).toBe(200)
+    })
+
+    it('should route POST /api/send-sticker-to-user', async () => {
+      const request = new Request('https://example.com/api/send-sticker-to-user', {
+        method: 'POST'
+      })
+
+      const response = await worker.fetch(request, mockEnv)
+
+      expect(mockSendStickerToUser).toHaveBeenCalledWith(request, mockEnv)
+      expect(response.status).toBe(200)
     })
 
     it('should return 405 for non-POST/POST-GET requests to webhook paths', async () => {
