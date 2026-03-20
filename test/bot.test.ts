@@ -282,4 +282,45 @@ describe('BotService', () => {
 
     expect(mockResponse).toHaveBeenCalled()
   })
+
+  test('Should inject moodText after mind/prompt as developer content', async () => {
+    mockResponse.mockResolvedValueOnce({
+      status: 'success',
+      output: [
+        {
+          type: 'message',
+          content: [
+            {
+              type: 'output_text',
+              text: JSON.stringify({
+                items: [{ type: 'text', content: 'ok' }]
+              })
+            }
+          ]
+        }
+      ]
+    })
+
+    const { responseApi } = getOpenAIClient('KEY')
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const mood =
+      'а'.repeat(160) +
+      ' настроение для теста инъекции в промпт без латиницы только кириллица дальше текста'
+
+    await responseApi([], { moodText: mood })
+
+    const callArgs = mockResponse.mock.calls[0][0]
+    const input = callArgs.input as { role: string; content: string }[]
+    const moodBlock = input.find(
+      (i) =>
+        i.role === 'developer' &&
+        typeof i.content === 'string' &&
+        i.content.includes('Текущее настроение в чате')
+    )
+    expect(moodBlock).toBeDefined()
+    expect(moodBlock?.content).toContain(mood.trim())
+
+    consoleSpy.mockRestore()
+  })
 })

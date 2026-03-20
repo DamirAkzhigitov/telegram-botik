@@ -4,7 +4,7 @@ This document analyzes **three** product directions against the current worker a
 
 **Locked product decisions** from stakeholder Q&A are in [§6](#6-locked-product-decisions). Implementation should follow §6; earlier narrative sections stay as background unless they match §6.
 
-**Implementation status (skip if already done):** [§4.1](#41-implementation-status--changelog) records what shipped in code vs what is still open. **Next in sequence:** **Stage 4 — Mood v1** (§4, mood in `chat_settings`). **§4.2** lists proposed next steps (UX, hardening, legacy cleanup).
+**Implementation status (skip if already done):** [§4.1](#41-implementation-status--changelog) records what shipped in code vs what is still open. **Next in sequence:** **§4.2** follow-ups (Mini App surfacing for mood/proactive flags, legacy cleanup). Stage 4 mood v1 is **shipped** — see §4.1.
 
 ## Current behavior (baseline)
 
@@ -233,13 +233,13 @@ Work is split into **sequential stages**. **Do not start stage _N_+1 until stage
 
 Use this subsection to avoid redoing finished work.
 
-| Stage                               | Status               | Notes                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **1** Directed-reply gating         | **Shipped (opt-in)** | Behind `chat_settings.directed_reply_gating` (default `false`). Legacy path unchanged when flag is off.                                                                                                                                                                                                                                                                                                |
-| **1b** Memory without reply (§6 #9) | **Shipped**          | Observer: `gpt-4.1-mini` `chat.completions` JSON `{"memories":[]}`. Runs when `!shouldReply` and `toggle_history` (after history persist). No coin check.                                                                                                                                                                                                                                              |
-| **2** `thread_activity`             | **Shipped**          | `SessionData.thread_activity`, `touchThreadActivity` + `resolveThreadActivityKey`; handler touches after `getSession`. Key `__default` for private/groups; supergroup + `message_thread_id` → decimal string (matches history `[forum_thread_id=N]`).                                                                                                                                                  |
-| **3** Proactive cron                | **Shipped**          | `triggers.crons` `0 */3 * * *` (UTC); `scheduled` → `runProactiveCronTick`; `chat_settings.proactive_enabled` (default false), `proactive_stale_hours` (default 48); KV list cursor `cron_proactive_list_cursor`; pending gate `proactive_pending`; `is_forum_supergroup` cache; module `src/cron/proactiveRevival.ts`; tests `test/cron/proactiveRevival.test.ts`, scheduled in `test/index.test.ts`. |
-| **4** Mood v1                       | **Not done**         |                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Stage                               | Status               | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **1** Directed-reply gating         | **Shipped (opt-in)** | Behind `chat_settings.directed_reply_gating` (default `false`). Legacy path unchanged when flag is off.                                                                                                                                                                                                                                                                                                                                                |
+| **1b** Memory without reply (§6 #9) | **Shipped**          | Observer: `gpt-4.1-mini` `chat.completions` JSON `{"memories":[]}`. Runs when `!shouldReply` and `toggle_history` (after history persist). No coin check.                                                                                                                                                                                                                                                                                              |
+| **2** `thread_activity`             | **Shipped**          | `SessionData.thread_activity`, `touchThreadActivity` + `resolveThreadActivityKey`; handler touches after `getSession`. Key `__default` for private/groups; supergroup + `message_thread_id` → decimal string (matches history `[forum_thread_id=N]`).                                                                                                                                                                                                  |
+| **3** Proactive cron                | **Shipped**          | `triggers.crons` `0 */3 * * *` (UTC); `scheduled` → `runProactiveCronTick`; `chat_settings.proactive_enabled` (default false), `proactive_stale_hours` (default 48); KV list cursor `cron_proactive_list_cursor`; pending gate `proactive_pending`; `is_forum_supergroup` cache; module `src/cron/proactiveRevival.ts`; tests `test/cron/proactiveRevival.test.ts`, scheduled in `test/index.test.ts`.                                                 |
+| **4** Mood v1                       | **Shipped**          | `chat_settings.mood_text` / `mood_updated_at`; admin `PATCH` validation (≥150 chars, Russian); `responseApi` injects mood in [`gpt.ts`](../src/gpt.ts); `updateMoodAfterAddressedTurn` ([`mood.ts`](../src/bot/mood.ts)) after each addressed reply + after proactive send; memory mirror `Настроение: …`; tests [`mood.test.ts`](../test/bot/mood.test.ts), [`sessions.test.ts`](../test/api/sessions.test.ts), [`bot.test.ts`](../test/bot.test.ts). |
 
 **Stage 1 — what was implemented (March 2026)**
 
@@ -296,10 +296,17 @@ Use this subsection to avoid redoing finished work.
 | Forum `message_thread_id`                                                                     | Uses cached `is_forum_supergroup` + numeric thread key; first send in a forum before any user message may lack cache (edge case)        |
 | Throughput                                                                                    | One **stale thread per chat** per cron tick (stagger multi-topic revivals across ticks); global caps on scanned keys and sends per tick |
 
+**Stage 4 — what was implemented (March 2026)**
+
+- **Types / settings:** [`ChatSettings`](../src/types.ts) **`mood_text`**, **`mood_updated_at`**; defaults unchanged in [`SessionController`](../src/service/SessionController.ts).
+- **Validation:** [`validateMoodTextForStorage`](../src/bot/mood.ts), [`validateChatSettingsPatchPartial`](../src/bot/mood.ts) from [`PATCH /api/sessions`](../src/api/sessions.ts); clear mood with `mood_text: ""` or `null`.
+- **Main model:** [`responseApi`](../src/gpt.ts) optional **`moodText`** → developer block after mind/custom `prompt`; [`messageHandler`](../src/bot/messageHandler.ts) passes [`resolveMoodForInjection`](../src/bot/mood.ts).
+- **Refresh:** [`updateMoodAfterAddressedTurn`](../src/bot/mood.ts) (`gpt-4.1-mini`, JSON `mood`) after each **addressed** full reply (after dispatch) and after **proactive** Telegram send ([`proactiveRevival.ts`](../src/cron/proactiveRevival.ts)); lazy decay in system prompt; **mirror** to memories as `Настроение: …` when text changes.
+- **Tests:** [`test/bot/mood.test.ts`](../test/bot/mood.test.ts), [`test/api/sessions.test.ts`](../test/api/sessions.test.ts) (PATCH validation), [`test/bot.test.ts`](../test/bot.test.ts) (injection), `messageHandler` mocks updated.
+
 ### 4.2 Proposed next steps
 
-**1. Stage 4 — Mood v1 (next in locked order §6 #27)**  
-Implement free-text mood under `chat_settings` (≥150 chars, Russian), validate in admin/Mini App, update only on addressed full-reply path, lazy decay, mirror into `memories`, inject in [`gpt.ts`](../src/gpt.ts). Extend tests per Stage 4 exit criteria. After Stage 4, proactive + directed paths can both consume mood as specified (§3 relation to §1).
+**1. Stage 4 — Mood v1** — **done** (§4.1). Optional: Mini App field for `mood_text` instead of admin PATCH only.
 
 **2. Product / UX (cross-cutting)**
 
@@ -393,7 +400,7 @@ Semantic / embedding-based “topic revival,” D1 audit table for proactive sen
 1. ~~Directed-reply gating + dynamic threading (+ thread metadata in history).~~ **Done (opt-in)** — see §4.1.
 2. ~~Per-thread activity metadata for cron.~~ **Done** — see §4.1 Stage 2.
 3. ~~Proactive cron v1.~~ **Done** — see §4.1 Stage 3 and §4.2.
-4. **Mood v1** — next (Stage 4).
+4. ~~**Mood v1**~~ — **Shipped** (§4.1).
 
 ---
 
@@ -405,7 +412,7 @@ Semantic / embedding-based “topic revival,” D1 audit table for proactive sen
 | **Personal chats vs Mini App**        | Settings UI is **group-oriented** today; **DMs** still need a way to toggle proactive (and other flags) — e.g. commands, deep link, or Mini App context by `chat_id`.        |
 | **Proactive toggle UX**               | **`proactive_enabled`** is **admin JSON PATCH** only (Stage 3). Mini App checkbox / copy still TBD — see §4.2.                                                               |
 | **Memory without reply**              | **Shipped** (Stage 1b): small-model observer when `toggle_history` and no visible reply.                                                                                     |
-| **Mood ≥150 characters**              | Enforce in admin/Mini App validation; define fallback if model returns shorter text (regenerate vs pad vs reject).                                                           |
+| **Mood ≥150 characters**              | **API:** enforced on admin `PATCH` `chat_settings.mood_text`. LLM mood refresh rejects invalid output (no session update). Mini App surfacing still optional.                |
 | **“No reply to proactive” detection** | **Implemented (v1):** any **user** message in the same `thread_activity` bucket clears `proactive_pending` for that key. Optional stricter rule (reply chain / time) — §4.2. |
 
 ---

@@ -12,8 +12,12 @@ import { runProactiveCronTick } from './cron/proactiveRevival'
 import type { Update } from 'telegraf/types'
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    return handleUpdate(request, env)
+  async fetch(
+    request: Request,
+    env: Env,
+    executionCtx?: ExecutionContext
+  ): Promise<Response> {
+    return handleUpdate(request, env, executionCtx)
   },
 
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
@@ -21,7 +25,11 @@ export default {
   }
 }
 
-async function handleUpdate(request: Request, env: Env) {
+async function handleUpdate(
+  request: Request,
+  env: Env,
+  executionCtx?: ExecutionContext
+) {
   const url = new URL(request.url)
   const pathname = url.pathname
 
@@ -39,13 +47,14 @@ async function handleUpdate(request: Request, env: Env) {
       return handleApiRequest(request, env, pathname)
     }
     try {
-      const bot = createBot(env)
+      const bot = createBot(env, false, executionCtx)
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
       const update = (await request.json()) as Update
       await bot.handleUpdate(update)
 
       return new Response('OK')
-    } catch {
+    } catch (e) {
+      console.error('POST webhook handler error', e)
       return new Response('Invalid request', { status: 400 })
     }
   }
@@ -842,6 +851,7 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       function beginSessionEdit() {
         const s = selectedSession?.session;
         if (!s) return;
+        const cs = s.chat_settings ?? {};
         setSessionDraft({
           model: s.model != null ? String(s.model) : 'not_set',
           prompt: s.prompt ?? '',
@@ -850,7 +860,14 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
           firstTime: Boolean(s.firstTime),
           promptNotSet: Boolean(s.promptNotSet),
           stickerNotSet: Boolean(s.stickerNotSet),
-          chat_settings_json: JSON.stringify(s.chat_settings ?? {}, null, 2),
+          mood_text: typeof cs.mood_text === 'string' ? cs.mood_text : '',
+          directed_reply_gating: Boolean(cs.directed_reply_gating),
+          proactive_enabled: Boolean(cs.proactive_enabled),
+          proactive_stale_hours:
+            cs.proactive_stale_hours != null && cs.proactive_stale_hours !== ''
+              ? String(cs.proactive_stale_hours)
+              : '',
+          chat_settings_json: JSON.stringify(cs, null, 2),
           memories_json: JSON.stringify(s.memories ?? [], null, 2)
         });
         setSessionEditing(true);
@@ -882,6 +899,32 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
         if (typeof chat_settings !== 'object' || chat_settings === null || Array.isArray(chat_settings)) {
           setSessionSaveError('Chat settings must be a JSON object');
           return;
+        }
+        const mt = (sessionDraft.mood_text || '').trim();
+        if (mt.length > 0 && mt.length < 150) {
+          setSessionSaveError('Mood text must be at least 150 characters (or leave empty to clear)');
+          return;
+        }
+        if (/[A-Za-z]/.test(mt)) {
+          setSessionSaveError('Mood text must be Russian only (no Latin letters)');
+          return;
+        }
+        const psh = (sessionDraft.proactive_stale_hours || '').trim();
+        if (psh !== '') {
+          const n = Number(psh);
+          if (!Number.isFinite(n) || n <= 0) {
+            setSessionSaveError('Proactive stale hours must be a positive number');
+            return;
+          }
+        }
+        chat_settings = {
+          ...chat_settings,
+          directed_reply_gating: sessionDraft.directed_reply_gating,
+          proactive_enabled: sessionDraft.proactive_enabled,
+          mood_text: mt === '' ? '' : mt
+        };
+        if (psh !== '') {
+          chat_settings.proactive_stale_hours = Number(psh);
         }
         if (!Array.isArray(memories)) {
           setSessionSaveError('Memories must be a JSON array');
@@ -1381,7 +1424,95 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
                   </div>
 
                   <div className="detail-item">
-                    <label>Chat Settings (JSON)</label>
+                    <label>Directed reply gating</label>
+                    {sessionEditing && d ? (
+                      <label style={{ display: 'flex', alignItems: 'center', fontWeight: 400 }}>
+                        <input
+                          type="checkbox"
+                          checked={d.directed_reply_gating}
+                          onChange={(e) =>
+                            setSessionDraft((prev) =>
+                              prev
+                                ? { ...prev, directed_reply_gating: e.target.checked }
+                                : prev
+                            )
+                          }
+                        />
+                        <span style={{ marginLeft: '8px' }}>Only reply when addressed (groups)</span>
+                      </label>
+                    ) : (
+                      <value>{session.chat_settings?.directed_reply_gating ? 'On' : 'Off'}</value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Proactive revival (cron)</label>
+                    {sessionEditing && d ? (
+                      <label style={{ display: 'flex', alignItems: 'center', fontWeight: 400 }}>
+                        <input
+                          type="checkbox"
+                          checked={d.proactive_enabled}
+                          onChange={(e) =>
+                            setSessionDraft((prev) =>
+                              prev ? { ...prev, proactive_enabled: e.target.checked } : prev
+                            )
+                          }
+                        />
+                        <span style={{ marginLeft: '8px' }}>Enabled</span>
+                      </label>
+                    ) : (
+                      <value>{session.chat_settings?.proactive_enabled ? 'On' : 'Off'}</value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Proactive stale hours</label>
+                    {sessionEditing && d ? (
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="empty = leave as in JSON / default 48"
+                        value={d.proactive_stale_hours}
+                        onChange={(e) =>
+                          setSessionDraft((prev) =>
+                            prev ? { ...prev, proactive_stale_hours: e.target.value } : prev
+                          )
+                        }
+                      />
+                    ) : (
+                      <value>
+                        {session.chat_settings?.proactive_stale_hours != null
+                          ? String(session.chat_settings.proactive_stale_hours)
+                          : '(default 48)'}
+                      </value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Mood (Russian, ≥150 chars)</label>
+                    {sessionEditing && d ? (
+                      <textarea
+                        value={d.mood_text}
+                        onChange={(e) =>
+                          setSessionDraft((prev) =>
+                            prev ? { ...prev, mood_text: e.target.value } : prev
+                          )
+                        }
+                        rows={8}
+                        placeholder="Leave empty to clear. Min 150 Cyrillic chars, no Latin letters."
+                      />
+                    ) : (
+                      <value style={{ whiteSpace: 'pre-wrap' }}>
+                        {session.chat_settings?.mood_text
+                          ? session.chat_settings.mood_text.slice(0, 280) +
+                            (session.chat_settings.mood_text.length > 280 ? '…' : '')
+                          : '(none)'}
+                      </value>
+                    )}
+                  </div>
+
+                  <div className="detail-item">
+                    <label>Chat Settings (JSON, advanced)</label>
                     {sessionEditing && d ? (
                       <textarea
                         value={d.chat_settings_json}

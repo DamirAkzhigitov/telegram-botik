@@ -10,11 +10,12 @@ This directory contains scripts to manage webhook setup and environment switchin
    - `.env` file: `BOT_TOKEN=your_bot_token_here`
    - `.env.local` file: `BOT_TOKEN=your_bot_token_here`
 
-2. **ngrok** (for development): Install ngrok for local development tunneling
+2. **cloudflared** (for development): Install Cloudflare Tunnel CLI so Telegram can reach `localhost:8787`
 
    ```bash
-   npm install -g ngrok
-   # or download from https://ngrok.com/download
+   # Debian/Ubuntu example; see https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
+   sudo apt install cloudflared
+   # or: brew install cloudflare/cloudflare/cloudflared
    ```
 
 3. **Cloudflare Workers**: Make sure you're logged in to Cloudflare Workers
@@ -24,39 +25,44 @@ This directory contains scripts to manage webhook setup and environment switchin
 
 ## Configuration
 
-Before using the scripts, update the configuration in `scripts/config.js`:
-
-1. **Development webhook URL**: Update the ngrok URL in the `dev.webhookUrl` field
-2. **Production webhook URL**: Update your Cloudflare Workers URL in the `prod.webhookUrl` field
-3. **Worker name**: Update the worker name in the `getWorkerName()` function
-4. **Subdomain**: Update the subdomain in the `getWorkerUrl()` function
+1. **Development webhook URL**: Set **`DEV_WEBHOOK_URL`** (or `CLOUDFLARE_TUNNEL_URL`) in `.env` to the **HTTPS** URL printed by `pnpm serve` (quick tunnel to `http://localhost:8787`). See `.env.example`.
+2. **Production webhook URL**: Update `prod.webhookUrl` in `scripts/config.js` to your deployed Workers URL (or keep in sync with Wrangler).
+3. Optional: adjust `getWorkerName()` / `getWorkerUrl()` in `scripts/config.js` if you use those helpers elsewhere.
 
 ## Available Scripts
 
 ### Development Environment
 
-#### Full Development Setup
+#### Development flow (two terminals)
 
-```bash
-npm run dev:full
-```
+1. **Terminal A** — Wrangler dev (worker on `http://localhost:8787`):
 
-This script will:
+   ```bash
+   pnpm dev
+   ```
 
-- Check if ngrok is installed and install it if needed
-- Start an ngrok tunnel to your local Wrangler dev server
-- Set the webhook to the ngrok URL
-- Start the Wrangler development server
-- Clean up everything when you stop the process (Ctrl+C)
+2. **Terminal B** — Quick tunnel (URL changes each run unless you use a [named tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/run-tunnel/trycloudflare/)):
+
+   ```bash
+   pnpm serve
+   ```
+
+   Copy the `https://….trycloudflare.com` (or your named tunnel URL).
+
+3. Put that URL in **`.env`**: `DEV_WEBHOOK_URL=https://…`
+4. Point Telegram at it:
+
+   ```bash
+   pnpm webhook:set-dev
+   ```
+
+If the tunnel restarts and the hostname changes, update `DEV_WEBHOOK_URL` and run `pnpm webhook:set-dev` again.
 
 #### Manual Webhook Management
 
 ```bash
-# Set webhook to development (ngrok)
-npm run webhook:set-dev
-
-# Switch to development mode (delete current + set dev)
-npm run webhook:switch-dev
+# Set webhook to development (reads DEV_WEBHOOK_URL from env / .env)
+pnpm webhook:set-dev
 ```
 
 ### Production Environment
@@ -100,15 +106,18 @@ The scripts will look for these environment variables:
 
 - `BOT_TOKEN`: Your Telegram bot token
 - `API_KEY`: Your OpenAI API key (for bot functionality)
-- `NGROK_AUTH_TOKEN`: Your ngrok auth token (optional, for authenticated tunnels)
+- `DEV_WEBHOOK_URL` or `CLOUDFLARE_TUNNEL_URL`: HTTPS URL of your dev tunnel (required for `pnpm webhook:set-dev`)
 
 ## Usage Examples
 
 ### Starting Development
 
 ```bash
-# Start full development environment
-npm run dev:full
+# Terminal 1
+pnpm dev
+# Terminal 2 — copy https URL into DEV_WEBHOOK_URL, then:
+pnpm serve
+pnpm webhook:set-dev
 ```
 
 ### Deploying to Production
@@ -144,15 +153,13 @@ npm run webhook:info
    - Make sure your bot token is in the environment or .env files
    - Check that the token is valid
 
-2. **ngrok not working**
+2. **cloudflared not found**
 
-   - Install ngrok globally: `npm install -g ngrok`
-   - Or download from https://ngrok.com/download
-   - Make sure you're not behind a restrictive firewall
+   - Install the Cloudflare Tunnel client (`cloudflared`) — see Cloudflare docs for your OS.
 
 3. **Webhook URL not accessible**
 
-   - For development: Make sure ngrok is running and the URL is correct
+   - For development: `pnpm dev` must be running on :8787 and `pnpm serve` must show a reachable `https://` URL; update `DEV_WEBHOOK_URL` whenever the quick-tunnel hostname changes.
    - For production: Make sure your Cloudflare Worker is deployed and accessible
 
 4. **Deployment fails**

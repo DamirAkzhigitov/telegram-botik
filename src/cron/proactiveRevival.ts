@@ -17,6 +17,10 @@ import {
   plainTextFromHistoryMessage
 } from '../bot/memoryObserver'
 import { THREAD_ACTIVITY_DEFAULT_KEY } from '../bot/threadActivity'
+import {
+  resolveMoodForInjection,
+  updateMoodAfterAddressedTurn
+} from '../bot/mood'
 import { getOpenAIClient } from '../gpt'
 
 /** KV cursor for paginated `session_*` scans across cron ticks. */
@@ -335,7 +339,8 @@ export async function runProactiveCronTick(env: Env): Promise<void> {
         {
           hasEnoughCoins: true,
           model: session.model,
-          prompt: session.prompt
+          prompt: session.prompt,
+          moodText: resolveMoodForInjection(session.chat_settings)
         }
       )
     } else {
@@ -405,5 +410,22 @@ export async function runProactiveCronTick(env: Env): Promise<void> {
       threadKey,
       new Date()
     )
+
+    const prevMood = resolveMoodForInjection(session.chat_settings)
+    const newMood = await updateMoodAfterAddressedTurn(openai, {
+      userLine: `proactive revival (cron) thread ${threadKey}\n${transcript.slice(-1200)}`,
+      assistantVisible: textToSend,
+      previousMood: prevMood,
+      previousMoodUpdatedAt: session.chat_settings.mood_updated_at
+    })
+    if (newMood && newMood.trim() !== (prevMood ?? '').trim()) {
+      await sessionController.updateSession(chatId, {
+        chat_settings: {
+          mood_text: newMood,
+          mood_updated_at: new Date().toISOString()
+        }
+      })
+      await sessionController.addMemory(chatId, `Настроение: ${newMood}`)
+    }
   }
 }

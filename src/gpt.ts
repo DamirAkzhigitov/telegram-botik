@@ -49,12 +49,15 @@ export const getOpenAIClient = (key: string) => {
       hasEnoughCoins: boolean
       model: string | undefined
       prompt: string | undefined
+      /** §4 Stage 4: Russian free-text mood from chat_settings (injected after mind/prompt). */
+      moodText?: string
     }
   ): Promise<MessagesArray | null> {
     const {
       hasEnoughCoins = false,
       model = DEFAULT_TEXT_MODEL,
-      prompt = ''
+      prompt = '',
+      moodText
     } = options || {}
 
     const input: OpenAI.Responses.ResponseInput = [
@@ -80,6 +83,14 @@ export const getOpenAIClient = (key: string) => {
       input.push({
         role: 'developer',
         content: mind
+      })
+    }
+    if (moodText?.trim()) {
+      input.push({
+        role: 'developer',
+        content:
+          'Текущее настроение в чате (учитывай тон и реакции; не цитируй дословно в ответе):\n' +
+          moodText.trim()
       })
     }
     if (messages.length > 0) input.push(...messages)

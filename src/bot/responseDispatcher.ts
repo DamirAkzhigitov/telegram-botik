@@ -10,9 +10,9 @@ interface ResponseDispatcherDeps {
   userService: UserService
   env: Env
   /**
-   * undefined: use session `send_message_option` only (legacy).
-   * number: directed mode — send in this forum topic.
-   * null: directed mode but trigger had no topic — strip fixed `message_thread_id` from options.
+   * undefined: use session `send_message_option` only (legacy non-forum).
+   * number: send in this forum topic (trigger message’s `message_thread_id`).
+   * null: strip fixed `message_thread_id` from options (e.g. directed DM, or forum message without topic id).
    */
   outboundMessageThreadId?: number | null
 }

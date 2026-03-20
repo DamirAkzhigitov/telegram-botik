@@ -73,5 +73,14 @@ export const filterResponseMessages = (
 ): NonMemoryMessage[] =>
   botMessages.filter((item) => item.type !== 'memory') as NonMemoryMessage[]
 
+export const joinVisibleAssistantText = (
+  messages: NonMemoryMessage[]
+): string =>
+  messages
+    .filter((m) => m.type === 'text')
+    .map((m) => m.content)
+    .join('\n')
+    .trim()
+
 export const extractMemoryItems = (botMessages: MessagesArray) =>
   botMessages.filter((item) => item.type === 'memory')

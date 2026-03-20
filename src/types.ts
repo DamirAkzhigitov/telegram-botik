@@ -21,6 +21,12 @@ export interface ChatSettings {
   proactive_enabled?: boolean
   /** Hours without user activity in a thread before revival is considered; default 48. */
   proactive_stale_hours?: number
+  /**
+   * Stage 4: free-text mood (Russian, ≥150 chars when set). Injected into main model; updated on addressed turns.
+   */
+  mood_text?: string
+  /** ISO time when mood_text was last set (LLM or admin). */
+  mood_updated_at?: string
 }
 
 /** Last-seen activity for cron / revival (per forum topic or one default bucket). */

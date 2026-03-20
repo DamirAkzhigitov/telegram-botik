@@ -4,14 +4,16 @@ import type { AxiosInstance } from 'axios'
 import { EmbeddingService } from '../service/EmbeddingService'
 import { SessionController } from '../service/SessionController'
 import { UserService } from '../service/UserService'
-import type { MessagesArray } from '../types'
+import type { MessagesArray, SessionData } from '../types'
 import {
   composeUserContent,
   createLoggedMessage,
   createUserMessage,
   extractMemoryItems,
-  filterResponseMessages
+  filterResponseMessages,
+  joinVisibleAssistantText
 } from './messageBuilder'
+import { resolveMoodForInjection, updateMoodAfterAddressedTurn } from './mood'
 import {
   sanitizeHistoryMessages,
   buildAssistantHistoryMessages,
@@ -43,8 +45,47 @@ type ResponseApi = (
     hasEnoughCoins: boolean
     model: string | undefined
     prompt: string | undefined
+    moodText?: string
   }
 ) => Promise<MessagesArray | null>
+
+function isForumChat(ctx: Context, sessionData: SessionData): boolean {
+  return (
+    (ctx.chat?.type === 'supergroup' &&
+      'is_forum' in ctx.chat &&
+      ctx.chat.is_forum === true) ||
+    sessionData.is_forum_supergroup === true
+  )
+}
+
+/**
+ * Legacy: non-forum chats use `send_message_option` as-is (`undefined`).
+ * Forum supergroups: use the trigger message’s topic (or `null` to drop a fixed `message_thread_id`).
+ * Directed mode: always `number` | `null` (same as forum send semantics, including DMs).
+ */
+function resolveOutboundMessageThreadId(
+  ctx: Context,
+  sessionData: SessionData,
+  directedOn: boolean
+): number | null | undefined {
+  const msg = ctx.message
+  const threadId =
+    msg &&
+    'message_thread_id' in msg &&
+    typeof msg.message_thread_id === 'number'
+      ? msg.message_thread_id
+      : undefined
+
+  if (directedOn) {
+    return threadId !== undefined ? threadId : null
+  }
+
+  if (!isForumChat(ctx, sessionData)) {
+    return undefined
+  }
+
+  return threadId !== undefined ? threadId : null
+}
 
 interface MessageHandlerDeps {
   env: Env
@@ -54,6 +95,8 @@ interface MessageHandlerDeps {
   userService: UserService
   telegramFileClient: AxiosInstance
   openai: OpenAI
+  /** Workers: defer mood persistence so the webhook can return 200 before the mood LLM finishes. */
+  waitUntil?: (promise: Promise<unknown>) => void
 }
 
 function logIncomingMessageCtx(ctx: Context) {
@@ -118,27 +161,33 @@ export const handleIncomingMessage = async (
 
   const directedOn = Boolean(sessionData.chat_settings.directed_reply_gating)
 
+  /** Legacy thread gate applies to forum/supergroup threads only — not DMs (§2 / UX). */
+  const legacyThreadAllowsReply =
+    ctx.chat?.type === 'private'
+      ? true
+      : sessionData.chat_settings.reply_only_in_thread
+        ? ctx.message?.message_thread_id === sessionData.chat_settings.thread_id
+        : true
+
   const shouldReply = directedOn
     ? await resolveShouldReplyDirected(ctx, deps.openai)
-    : sessionData.chat_settings.reply_only_in_thread
-      ? ctx.message?.message_thread_id === sessionData.chat_settings.thread_id
-      : true
+    : legacyThreadAllowsReply
+
+  const isForum = isForumChat(ctx, sessionData)
 
   const historyThreadPrefix =
-    directedOn &&
+    (directedOn || isForum) &&
     ctx.message &&
     'message_thread_id' in ctx.message &&
     typeof ctx.message.message_thread_id === 'number'
       ? `[forum_thread_id=${ctx.message.message_thread_id}]\n`
       : undefined
 
-  const outboundMessageThreadId = directedOn
-    ? ctx.message &&
-      'message_thread_id' in ctx.message &&
-      typeof ctx.message.message_thread_id === 'number'
-      ? ctx.message.message_thread_id
-      : null
-    : undefined
+  const outboundMessageThreadId = resolveOutboundMessageThreadId(
+    ctx,
+    sessionData,
+    directedOn
+  )
 
   const username =
     ctx.message?.from?.username ||
@@ -267,6 +316,8 @@ export const handleIncomingMessage = async (
   if (!ctx.from) return
   const hasEnoughCoins = await deps.userService.hasEnoughCoins(ctx.from.id, 1)
 
+  const previousMoodForTurn = resolveMoodForInjection(sessionData.chat_settings)
+
   const botMessages = await deps.responseApi(
     [
       ...formattedMemories,
@@ -294,7 +345,8 @@ export const handleIncomingMessage = async (
     {
       hasEnoughCoins,
       model: sessionData.model,
-      prompt: sessionData.prompt
+      prompt: sessionData.prompt,
+      moodText: previousMoodForTurn
     }
   )
 
@@ -336,9 +388,7 @@ export const handleIncomingMessage = async (
     model: sessionData.model
   })
 
-  const typingExtras = directedOn
-    ? resolveSendExtras(sessionData, outboundMessageThreadId)
-    : sessionData.chat_settings.send_message_option
+  const typingExtras = resolveSendExtras(sessionData, outboundMessageThreadId)
 
   await ctx.telegram.sendChatAction(chatId, 'typing', typingExtras)
   await delay()
@@ -349,4 +399,33 @@ export const handleIncomingMessage = async (
     env: deps.env,
     outboundMessageThreadId
   })
+
+  const runMoodPipeline = async () => {
+    try {
+      const assistantVisible = joinVisibleAssistantText(responseMessages)
+      const newMood = await updateMoodAfterAddressedTurn(deps.openai, {
+        userLine: message.slice(0, 4000),
+        assistantVisible,
+        previousMood: previousMoodForTurn,
+        previousMoodUpdatedAt: sessionData.chat_settings.mood_updated_at
+      })
+      if (newMood && newMood.trim() !== (previousMoodForTurn ?? '').trim()) {
+        await deps.sessionController.updateSession(chatId, {
+          chat_settings: {
+            mood_text: newMood,
+            mood_updated_at: new Date().toISOString()
+          }
+        })
+        await deps.sessionController.addMemory(chatId, `Настроение: ${newMood}`)
+      }
+    } catch (e) {
+      console.error('mood update pipeline', e)
+    }
+  }
+
+  if (deps.waitUntil) {
+    deps.waitUntil(runMoodPipeline())
+  } else {
+    await runMoodPipeline()
+  }
 }

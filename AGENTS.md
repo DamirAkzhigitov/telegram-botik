@@ -14,13 +14,14 @@ Core worker logic stays in `src/`, with `src/index.ts` dispatching requests and 
 
 - `pnpm dev` – run the worker with Wrangler hot reload.
 - `pnpm dev:local` – execute `src/local-test.ts` with `.env.local` to mimic Telegram locally.
-- `pnpm serve` – start ngrok tunnel for local development on port 8787.
+- `pnpm serve` – start a **Cloudflare quick tunnel** (`cloudflared`) to `localhost:8787`; copy the printed `https://…` URL into `DEV_WEBHOOK_URL` in `.env`, then run `pnpm webhook:set-dev`.
 
 ### Testing
 
 - `pnpm test` – run Vitest (add `--watch` when iterating).
 - `pnpm test:coverage` – run Vitest with coverage report.
 - `pnpm test:e2e` – webhook → Telegraf → message handler pipeline (local Telegram API stub + mocked LLM/embeddings); see `test/e2e/webhook-message.test.ts`.
+- **E2E vs LLM testing strategy** (gaps, phases, CI ideas): `docs/testing-e2e-and-llm.md`.
 
 ### Code Quality
 
@@ -61,4 +62,4 @@ Follow the existing log: short, imperative subjects (e.g., `turn off image gener
 
 ## Security & Configuration Tips
 
-Store secrets with `wrangler secret put` or in `.env.local`; never commit tokens. Double-check `scripts/setup-webhook.js` arguments before running, especially when switching between tunnels and production domains. Remove temporary ngrok URLs when promoting to production and rotate API keys if they were exposed during debugging.
+Store secrets with `wrangler secret put` or in `.env.local`; never commit tokens. Double-check `scripts/setup-webhook.js` and `DEV_WEBHOOK_URL` in `.env` before running `webhook:set-dev`. Remove temporary tunnel URLs when promoting to production and rotate API keys if they were exposed during debugging.

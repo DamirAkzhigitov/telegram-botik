@@ -1,6 +1,7 @@
 import { authenticateRequest } from './auth'
 import { SessionController } from '../service/SessionController'
 import type { ChatSettings, Memory, SessionData } from '../types'
+import { validateChatSettingsPatchPartial } from '../bot/mood'
 
 interface SessionSummary {
   chatId: string
@@ -195,7 +196,25 @@ function parseSessionPatch(
     ) {
       return { ok: false, error: 'chat_settings must be an object' }
     }
-    patch.chat_settings = raw.chat_settings as ChatSettings
+    const cs = raw.chat_settings as Record<string, unknown>
+    const moodErr = validateChatSettingsPatchPartial(cs)
+    if (moodErr) {
+      return { ok: false, error: moodErr }
+    }
+    let nextSettings = raw.chat_settings as ChatSettings
+    if ('mood_text' in cs && (cs.mood_text === '' || cs.mood_text === null)) {
+      nextSettings = {
+        ...nextSettings,
+        mood_text: undefined,
+        mood_updated_at: undefined
+      }
+    } else if (typeof cs.mood_text === 'string' && cs.mood_text.length > 0) {
+      nextSettings = {
+        ...nextSettings,
+        mood_updated_at: new Date().toISOString()
+      }
+    }
+    patch.chat_settings = nextSettings
   }
 
   if ('memories' in raw) {

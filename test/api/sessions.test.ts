@@ -432,6 +432,82 @@ describe('API Sessions', () => {
       const body = await response.json()
       expect(body.session.prompt).toBe('new prompt')
     })
+
+    it('should return 400 when mood_text is too short', async () => {
+      ;(authenticateRequest as any).mockResolvedValueOnce({
+        userId: 123,
+        adminAuthService: mockAdminAuthService
+      })
+      mockAdminAuthService.verifyAdminStatus.mockResolvedValueOnce(true)
+
+      mockRequest = new Request('https://example.com/api/sessions/123?_auth=test', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          chat_settings: { mood_text: 'коротко' }
+        })
+      })
+
+      const response = await patchSession(mockRequest, mockEnv, '123')
+
+      expect(response.status).toBe(400)
+      const body = await response.json()
+      expect(body.error).toContain('mood_text')
+    })
+
+    it('should accept valid mood_text and set mood_updated_at', async () => {
+      ;(authenticateRequest as any).mockResolvedValueOnce({
+        userId: 123,
+        adminAuthService: mockAdminAuthService
+      })
+      mockAdminAuthService.verifyAdminStatus.mockResolvedValueOnce(true)
+
+      const mood =
+        'а'.repeat(160) +
+        ' валидное настроение для патча только кириллица без латиницы продолжаем текст для минимальной длины'
+
+      const before = {
+        model: 'gpt-4.1-mini',
+        prompt: '',
+        stickersPacks: [],
+        memories: [],
+        userMessages: [],
+        toggle_history: true,
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        chat_settings: {}
+      }
+      const after = {
+        ...before,
+        chat_settings: {
+          mood_text: mood,
+          mood_updated_at: '2026-01-01T00:00:00.000Z'
+        }
+      }
+
+      mockSessionController.getSession
+        .mockResolvedValueOnce(before)
+        .mockResolvedValueOnce(after)
+      mockSessionController.updateSession.mockResolvedValueOnce(undefined)
+      mockAdminAuthService.getChatInfo.mockResolvedValueOnce({
+        id: 123,
+        title: 'T',
+        type: 'group'
+      })
+
+      mockRequest = new Request('https://example.com/api/sessions/123?_auth=test', {
+        method: 'PATCH',
+        body: JSON.stringify({ chat_settings: { mood_text: mood } })
+      })
+
+      const response = await patchSession(mockRequest, mockEnv, '123')
+
+      expect(response.status).toBe(200)
+      expect(mockSessionController.updateSession).toHaveBeenCalled()
+      const call = mockSessionController.updateSession.mock.calls[0]
+      expect(call[1].chat_settings.mood_text).toBe(mood)
+      expect(typeof call[1].chat_settings.mood_updated_at).toBe('string')
+    })
   })
 
   describe('getAdminChats', () => {

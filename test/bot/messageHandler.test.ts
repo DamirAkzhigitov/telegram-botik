@@ -28,15 +28,24 @@ vi.mock('../../src/bot/history', async (importOriginal) => {
   }
 })
 
-vi.mock('../../src/bot/messageBuilder', () => ({
-  composeUserContent: vi.fn(({ username, trimmedMessage }: any) => [
-    { type: 'input_text', text: `${username}: ${trimmedMessage}` }
-  ]),
-  createUserMessage: vi.fn((content: any) => ({ role: 'user', content })),
-  createLoggedMessage: vi.fn((m: any) => m),
-  extractMemoryItems: vi.fn((msgs: any[]) => msgs.filter((m) => m.type === 'memory')),
-  filterResponseMessages: vi.fn((msgs: any[]) => msgs.filter((m) => m.type !== 'memory'))
-}))
+vi.mock('../../src/bot/messageBuilder', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../src/bot/messageBuilder')>()
+  return {
+    ...actual,
+    composeUserContent: vi.fn(({ username, trimmedMessage }: any) => [
+      { type: 'input_text', text: `${username}: ${trimmedMessage}` }
+    ]),
+    createUserMessage: vi.fn((content: any) => ({ role: 'user', content })),
+    createLoggedMessage: vi.fn((m: any) => m),
+    extractMemoryItems: vi.fn((msgs: any[]) =>
+      msgs.filter((m) => m.type === 'memory')
+    ),
+    filterResponseMessages: vi.fn((msgs: any[]) =>
+      msgs.filter((m) => m.type !== 'memory')
+    )
+  }
+})
 
 vi.mock('../../src/bot/responseDispatcher', async (importOriginal) => {
   const actual =
@@ -59,6 +68,11 @@ vi.mock('../../src/bot/memoryObserver', async (importOriginal) => {
     extractBackgroundMemories: vi.fn().mockResolvedValue([])
   }
 })
+
+vi.mock('../../src/bot/mood', () => ({
+  resolveMoodForInjection: vi.fn(() => undefined),
+  updateMoodAfterAddressedTurn: vi.fn().mockResolvedValue(null)
+}))
 
 // Helpers to access mocks
 const ensureSessionReady = (await import('../../src/bot/sessionGuards')).ensureSessionReady as unknown as ReturnType<typeof vi.fn>
@@ -226,7 +240,12 @@ describe('messageHandler', () => {
       // API called with options
       expect(responseApi).toHaveBeenCalled()
       const [, options] = responseApi.mock.calls[0]
-      expect(options).toEqual({ hasEnoughCoins: true, model: 'gpt-5-mini-2025-08-07', prompt: '' })
+      expect(options).toMatchObject({
+        hasEnoughCoins: true,
+        model: 'gpt-5-mini-2025-08-07',
+        prompt: ''
+      })
+      expect(options.moodText).toBeUndefined()
 
       // After API
       expect(extractMemoryItems).toHaveBeenCalled()
@@ -278,6 +297,43 @@ describe('messageHandler', () => {
       expect(sessionController.getSession).not.toHaveBeenCalled()
     })
 
+    it('private chat ignores reply_only_in_thread (always allows reply)', async () => {
+      sessionController.getSession.mockResolvedValueOnce({
+        userMessages: [],
+        stickersPacks: [],
+        prompt: '',
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        toggle_history: true,
+        model: 'gpt-5-mini-2025-08-07',
+        memories: [],
+        chat_settings: {
+          reply_only_in_thread: true,
+          thread_id: 999,
+          send_message_option: {}
+        }
+      } as SessionData)
+
+      const privateCtx = {
+        ...ctx,
+        chat: { id: 777, type: 'private' as const }
+      }
+
+      await handleIncomingMessage(privateCtx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(responseApi).toHaveBeenCalled()
+      expect(dispatchResponsesSequentially).toHaveBeenCalled()
+    })
+
     it('reply_only_in_thread prevents response outside the thread', async () => {
       sessionController.getSession.mockResolvedValueOnce({
         userMessages: [],
@@ -296,7 +352,7 @@ describe('messageHandler', () => {
         }
       } as SessionData)
 
-      // message has no thread id, so should not reply
+      // supergroup/undefined chat: message has no thread id, so should not reply
       await handleIncomingMessage(ctx as Context, {
         env,
         responseApi,
@@ -678,6 +734,59 @@ describe('messageHandler', () => {
 
       expect(responseApi).not.toHaveBeenCalled()
       expect(dispatchResponsesSequentially).not.toHaveBeenCalled()
+    })
+
+    it('legacy forum supergroup: replies in the trigger topic, not fixed send_message_option', async () => {
+      sessionController.getSession.mockResolvedValueOnce({
+        userMessages: [],
+        stickersPacks: [],
+        prompt: '',
+        firstTime: false,
+        promptNotSet: false,
+        stickerNotSet: false,
+        toggle_history: true,
+        model: 'gpt-5-mini-2025-08-07',
+        memories: [],
+        chat_settings: {
+          reply_only_in_thread: false,
+          directed_reply_gating: false,
+          send_message_option: { message_thread_id: 1 }
+        },
+        is_forum_supergroup: true
+      } as SessionData)
+
+      const forumCtx = {
+        ...ctx,
+        chat: { id: 777, type: 'supergroup' as const, is_forum: true as const },
+        message: {
+          ...(ctx.message as object),
+          text: 'hello',
+          message_thread_id: 42
+        }
+      }
+
+      await handleIncomingMessage(forumCtx as Context, {
+        env,
+        responseApi,
+        embeddingService,
+        sessionController,
+        userService,
+        telegramFileClient,
+        openai: mockOpenAI
+      })
+
+      expect(composeUserContent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          historyThreadPrefix: '[forum_thread_id=42]\n'
+        })
+      )
+      expect(dispatchResponsesSequentially).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ outboundMessageThreadId: 42 })
+      )
+      expect(forumCtx.telegram!.sendChatAction).toHaveBeenCalledWith(777, 'typing', {
+        message_thread_id: 42
+      })
     })
 
     it('should handle reply_only_in_thread when message is in thread', async () => {

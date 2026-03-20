@@ -1,13 +1,12 @@
 // Configuration file for webhook URLs and settings
-// Update these values according to your setup
+// Dev URL: set DEV_WEBHOOK_URL or CLOUDFLARE_TUNNEL_URL in .env (see .env.example)
 
 export const config = {
-  // Development environment (ngrok)
+  // Development — public HTTPS URL of cloudflared (or other tunnel) to wrangler dev :8787
   dev: {
-    webhookUrl: 'https://yu-sylphy-robustiously.ngrok-free.dev',
-    description: 'Development webhook (ngrok)',
-    wranglerPort: 8787,
-    ngrokRegion: 'us' // or 'eu', 'au', 'ap', 'sa', 'jp', 'in'
+    webhookUrl: '',
+    description: 'Development webhook (Cloudflare Tunnel)',
+    wranglerPort: 8787
   },
 
   // Production environment (Cloudflare Workers)
@@ -28,7 +27,8 @@ export const config = {
   env: {
     botTokenKey: 'BOT_TOKEN',
     apiKeyKey: 'API_KEY',
-    ngrokAuthTokenKey: 'NGROK_AUTH_TOKEN'
+    devWebhookUrlKey: 'DEV_WEBHOOK_URL',
+    devWebhookUrlAltKey: 'CLOUDFLARE_TUNNEL_URL'
   }
 }
 

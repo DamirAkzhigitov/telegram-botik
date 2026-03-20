@@ -20,7 +20,11 @@ function parseBotInfoFixture(
   }
 }
 
-export const createBot = (env: Env, webhookReply = false) => {
+export const createBot = (
+  env: Env,
+  webhookReply = false,
+  executionCtx?: ExecutionContext
+) => {
   const { responseApi, openai } = getOpenAIClient(env.API_KEY)
 
   const embeddingService = new EmbeddingService(env)
@@ -51,7 +55,8 @@ export const createBot = (env: Env, webhookReply = false) => {
         sessionController,
         userService,
         telegramFileClient,
-        openai
+        openai,
+        waitUntil: executionCtx?.waitUntil.bind(executionCtx)
       })
     } catch (error) {
       console.error('Error processing message:', error)
