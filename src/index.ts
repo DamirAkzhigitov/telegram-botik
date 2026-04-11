@@ -1075,9 +1075,9 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
       function renderTabContent() {
         if (activeTab === TABS.welcome) {
           return (
-            <div className="welcome-screen">
-              <h1>Welcome</h1>
-              <p>Use the tabs below to navigate between sections.</p>
+            <div className="welcome-screen" lang="ru">
+              <h1>Добро пожаловать</h1>
+              <p>Переключайтесь между разделами с помощью вкладок ниже.</p>
             </div>
           );
         }
@@ -1813,7 +1813,7 @@ function serveAdminPanel(_request: Request, _env: Env): Response {
               className={\`tab \${activeTab === TABS.welcome ? 'active' : ''}\`}
               onClick={() => setActiveTab(TABS.welcome)}
             >
-              Welcome
+              Главная
             </button>
             <button
               className={\`tab \${activeTab === TABS.admin ? 'active' : ''}\`}
