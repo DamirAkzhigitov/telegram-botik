@@ -64,3 +64,11 @@ Follow the existing log: short, imperative subjects (e.g., `turn off image gener
 ## Security & Configuration Tips
 
 Store secrets with `wrangler secret put` or in `.env.local`; never commit tokens. Double-check `scripts/setup-webhook.js` and `DEV_WEBHOOK_URL` in `.env` before running `webhook:set-dev`. Remove temporary tunnel URLs when promoting to production and rotate API keys if they were exposed during debugging.
+
+## Cursor Cloud specific instructions
+
+- **Dev server**: Run `npx wrangler dev --local` to start the Cloudflare Worker locally on `http://localhost:8787`. The `--local` flag avoids needing a Cloudflare account. The root `/` and `/health` endpoints return `OK`. The `/admin?dev=1` endpoint serves the admin panel in dev mode (bypasses Telegram auth).
+- **All external APIs are mocked in tests**: `pnpm test` requires no API keys, Cloudflare account, or external services. All 453+ tests pass out of the box.
+- **Webhook POST without secrets**: Sending a Telegram update POST to `/` will return `400 Invalid request` when `BOT_TOKEN` is not configured — this is expected. The worker initialises the Telegraf bot using `BOT_TOKEN` from the environment, so real webhook handling requires the secret.
+- **Pre-commit hook** runs `lint-staged` (ESLint + Prettier). **Pre-push hook** runs `pnpm typecheck`. Both are installed by Husky via `pnpm install`.
+- **Node.js 22** is required (see `.nvmrc`). The VM snapshot already has it via nvm.
