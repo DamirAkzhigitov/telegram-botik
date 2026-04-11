@@ -35,7 +35,8 @@ Core worker logic stays in `src/`, with `src/index.ts` dispatching requests and 
 
 ### Cloudflare Worker
 
-- `pnpm deploy` – deploy to Cloudflare Workers (preview).
+- `pnpm deploy` / `pnpm deploy:prod` – deploy the **default (production)** Worker from the top level of `wrangler.jsonc` (`wrangler deploy --env=""`).
+- `pnpm deploy:dev` – deploy the **`development`** Wrangler environment as a separate Worker (`{name}-development`) with its own variables and secrets; use `wrangler secret put NAME --env development` for dev-only secrets.
 - `pnpm cf-typegen` – generate TypeScript types from Wrangler configuration.
 
 ### Webhook Management

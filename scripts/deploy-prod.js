@@ -60,7 +60,7 @@ async function deployWorker() {
   console.log('🚀 Deploying to Cloudflare Workers...')
 
   try {
-    execSync('npx wrangler deploy', {
+    execSync('npx wrangler deploy --env=""', {
       stdio: 'inherit',
       cwd: join(__dirname, '..')
     })
