@@ -30,7 +30,9 @@
   "vars": {
     "MY_VARIABLE": "production_value",
     // Telegram bot @username without @; override in .dev.vars for a test bot.
-    "BOT_USERNAME": "nairbru007bot"
+    "BOT_USERNAME": "nairbru007bot",
+    // Distinguishes deployments in code/logs; production is the default Wrangler environment.
+    "ENVIRONMENT": "production"
   },
   "compatibility_flags": ["nodejs_compat"],
   "kv_namespaces": [
@@ -49,6 +51,44 @@
   ],
   "triggers": {
     "crons": ["0 */3 * * *"]
+  },
+  /**
+   * Named Wrangler environments deploy as separate Workers: `{name}-{env}`.
+   * https://developers.cloudflare.com/workers/wrangler/environments/
+   *
+   * - Default / `pnpm deploy` → production bindings & secrets (this file’s top level).
+   * - `pnpm deploy:dev` / `wrangler deploy --env development` → `my-first-worker-development`
+   *   with its own Variables & Secrets in the dashboard (pick environment in the UI) or via
+   *   `wrangler secret put NAME --env development`.
+   *
+   * Bindings (KV, D1) are non-inheritable: repeat them here. Use the same IDs to share data,
+   * or create separate KV/D1 resources and replace IDs for full isolation.
+   */
+  "env": {
+    "development": {
+      "vars": {
+        "MY_VARIABLE": "development_value",
+        "BOT_USERNAME": "nairbru007bot",
+        "ENVIRONMENT": "development"
+      },
+      "kv_namespaces": [
+        {
+          "binding": "CHAT_SESSIONS_STORAGE",
+          "id": "152f559c031a41daa33b0bab2f1a3f24",
+          "preview_id": "152f559c031a41daa33b0bab2f1a3f24"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "bot-users-db",
+          "database_id": "0258e356-702e-4246-889f-50b82c573ad6"
+        }
+      ],
+      "triggers": {
+        "crons": ["0 */3 * * *"]
+      }
+    }
   }
   /**
    * Note: Use secrets to store sensitive data.

@@ -62,7 +62,8 @@ This project is a Telegram bot that leverages OpenAI's GPT-4 API to simulate eng
 
    - Set up D1 database (see [D1_SETUP.md](D1_SETUP.md))
    - Configure KV namespace in `wrangler.jsonc`
-   - Set secrets: `wrangler secret put BOT_TOKEN` and `wrangler secret put API_KEY`
+   - Set secrets for **production** (default Worker): `wrangler secret put BOT_TOKEN` and `wrangler secret put API_KEY`
+   - For a **separate dev deployment** (`pnpm deploy:dev`), set the same secret names with `--env development` (see [Cloudflare Workers environments](https://developers.cloudflare.com/workers/wrangler/environments/))
 
 ## Development
 
@@ -78,8 +79,8 @@ This project is a Telegram bot that leverages OpenAI's GPT-4 API to simulate eng
 - `pnpm lint:fix` - Run ESLint with auto-fix
 - `pnpm format` - Format code with Prettier
 - `pnpm format:check` - Check code formatting
-- `pnpm deploy` - Deploy to Cloudflare Workers (preview)
-- `pnpm deploy:prod` - Deploy to production
+- `pnpm deploy` / `pnpm deploy:prod` - Deploy production Worker (top-level `wrangler.jsonc` config)
+- `pnpm deploy:dev` - Deploy the `development` environment as `{worker-name}-development` with its own variables and secrets
 - `pnpm webhook:set-dev` - Set webhook to development URL
 - `pnpm webhook:set-prod` - Set webhook to production URL
 - `pnpm webhook:info` - Get current webhook information

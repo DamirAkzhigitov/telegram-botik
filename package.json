@@ -21,7 +21,9 @@
   },
   "author": "Damir Akzhigitov",
   "scripts": {
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy --env=\"\"",
+    "deploy:prod": "wrangler deploy --env=\"\"",
+    "deploy:dev": "wrangler deploy --env development",
     "dev": "wrangler dev --remote",
     "format": "prettier . --write",
     "format:check": "prettier . --check",

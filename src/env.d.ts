@@ -1,5 +1,11 @@
 declare namespace Cloudflare {
   interface Env {
+    /** OpenAI (and related) API key — set via `wrangler secret put` (per environment). */
+    API_KEY: string
+    /** Telegram bot token — set via `wrangler secret put` (per environment). */
+    BOT_TOKEN: string
+    /** Pinecone API key — set via `wrangler secret put` (per environment). */
+    PINECONE: string
     XAI_API_KEY?: string
     /** JSON `User` from getMe — skips live getMe on first update (Vitest / local harness). */
     TELEGRAM_BOT_INFO_JSON?: string
